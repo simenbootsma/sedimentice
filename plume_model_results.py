@@ -4,13 +4,14 @@ from PlumeModel import PlumeModel, ConvergenceError
 import matplotlib
 import pandas as pd
 import pickle
+from ablation_rate_experiments import data_Ward2024
 import time
 import cmcrameri.cm as cmc
 import cmocean.cm as cmo
 
 matplotlib.use('Qt5Agg')
 
-DEFAULT_PARAMETERS = {
+BEST_FIT_PARAMETERS = {
     "T_inf": 20,  # ambient temperature (degrees C)
     "S_inf": 0,  # ambient salinity (g/kg)
     "b0": 5.38e-5,  # plume breadth at the top (m)
@@ -26,13 +27,78 @@ DEFAULT_PARAMETERS = {
 }
 
 
+BEST_FIT_PARAMETERS = {
+    "T_inf": 20,  # ambient temperature (degrees C)
+    "S_inf": 0,  # ambient salinity (g/kg)
+    "b0": 1.67e-2,  # plume breadth at the top (m)
+    "w0": 3.59e-5,  # plume velocity at the top (m/s)
+    "phi0": 0.0,  # plume particle volume fraction at the top (-)
+    "alpha": 4.64e-4,  # entrainment coefficient (-)
+    "w_a": 0,  # ambient water velocity (m/s)
+    "dRdt": -1e-5,  # ablation rate (m/s)
+    "d_p": 1e-3,  # particle diameter (m)
+    "z0": 1e-6,  # location of first grid point (m)
+    "max_z": 0.1,  # cylinder height (m)
+    "n_points": 1000  # number of grid points
+}
+
+BEST_FIT_SMALL_PARAMETERS = {
+    "T_inf": 20,  # ambient temperature (degrees C)
+    "S_inf": 0,  # ambient salinity (g/kg)
+    "b0": 2.78e-3,  # plume breadth at the top (m)
+    "w0": 2.15e-2,  # plume velocity at the top (m/s)
+    "phi0": 0.6,  # plume particle volume fraction at the top (-)
+    "alpha": 7.74e-2,  # entrainment coefficient (-)
+    "w_a": 0,  # ambient water velocity (m/s)
+    "dRdt": -1e-5,  # ablation rate (m/s)
+    "d_p": 1e-3,  # particle diameter (m)
+    "z0": 1e-6,  # location of first grid point (m)
+    "max_z": 0.1,  # cylinder height (m)
+    "n_points": 1000  # number of grid points
+}
+
+
+BEST_FIT_LARGE_PARAMETERS = {
+    "T_inf": 20,  # ambient temperature (degrees C)
+    "S_inf": 0,  # ambient salinity (g/kg)
+    "b0": 4.64e-4,  # plume breadth at the top (m)
+    "w0": 2.15e-2,  # plume velocity at the top (m/s)
+    "phi0": 0.0,  # plume particle volume fraction at the top (-)
+    "alpha": 1e-5,  # entrainment coefficient (-)
+    "w_a": 0,  # ambient water velocity (m/s)
+    "dRdt": -1e-5,  # ablation rate (m/s)
+    "d_p": 1e-3,  # particle diameter (m)
+    "z0": 1e-6,  # location of first grid point (m)
+    "max_z": 0.1,  # cylinder height (m)
+    "n_points": 1000  # number of grid points
+}
+
+
+NON_MONOTONIC_PARAMETERS = {
+    "T_inf": 20,  # ambient temperature (degrees C)
+    "S_inf": 0,  # ambient salinity (g/kg)
+    "b0": 5e-4,  # plume breadth at the top (m)
+    "w0": 0,  # plume velocity at the top (m/s)
+    "phi0": 0.2,  # plume particle volume fraction at the top (-)
+    "alpha": 0.004,  # entrainment coefficient (-)
+    "w_a": 0,  # ambient water velocity (m/s)
+    "dRdt": -1e-5,  # ablation rate (m/s)
+    "d_p": 1e-3,  # particle diameter (m)
+    "z0": 1e-6,  # location of first grid point (m)
+    "max_z": 0.1,  # cylinder height (m)
+    "n_points": 1000  # number of grid points
+}
+
+DEFAULT_PARAMETERS = BEST_FIT_PARAMETERS
+
+
 # DEFAULT_PARAMETERS = {
 #     "T_inf": 20,  # ambient temperature (degrees C)
 #     "S_inf": 0,  # ambient salinity (g/kg)
-#     "b0": 5e-4,  # plume breadth at the top (m)
-#     "w0": 0,  # plume velocity at the top (m/s)
-#     "phi0": 0.2,  # plume particle volume fraction at the top (-)
-#     "alpha": 0.004,  # entrainment coefficient (-)
+#     "b0": 5e-5,  # plume breadth at the top (m)
+#     "w0": 2e-2,  # plume velocity at the top (m/s)
+#     "phi0": 0.0,  # plume particle volume fraction at the top (-)
+#     "alpha": 1e-1,  # entrainment coefficient (-)
 #     "w_a": 0,  # ambient water velocity (m/s)
 #     "dRdt": -1e-5,  # ablation rate (m/s)
 #     "d_p": 1e-3,  # particle diameter (m)
@@ -43,18 +109,20 @@ DEFAULT_PARAMETERS = {
 
 
 def main():
-    is_model_stable()
-    is_there_a_maximum()
-    # parameter_dependence_4d(pickled=True)
+    # composite_melt_rate_curve()
+
+    # average_phi_curve()
     # profiles()
 
-    # best_model_fit()
+    best_model_fit()
     # melt_rate_curve_comparison()
     # average_phi_curve()
 
     # all_parameter_dependence(pickled=False)
     # best_model_fit()
-    melt_rate_curve()
+    # show_melt_rate_curve()
+    # melt_rates_natural_forced_comparison()
+    melt_rates_ws_comparison()
 
     # plt.ion()
     # avg_phi_parameter_dependence('alpha', (0, 0.1))
@@ -66,7 +134,7 @@ def main():
 
     """ For checking the dependence of the melt rate curve on parameters """
     # parameter_dependence("phi_s", (0.55, 0.65))
-    multiple_parameter_dependence()
+    # multiple_parameter_dependence()
 
     # plt.ion()
     # parameter_dependence('alpha', (1e-4, 1e-1), log=True)
@@ -121,39 +189,48 @@ def best_model_fit():
     exp_drdt = data_means['drdt'].values  # melt rate in m/s
 
     # Model
-    with open('data/model_random_parameters_phi00.pkl', 'rb') as f:
+    with open('data/model_4d_var_ws.pkl', 'rb') as f:
         drdt, dp, points = pickle.load(f)
+
+    exp_ind = np.argwhere(exp_dp > 5e-4)
 
     rms = np.zeros(drdt.shape[0])
     for i in range(drdt.shape[0]):
         err, cnt = 0, 0
-        for j in range(len(exp_dp)):
+        for j in exp_ind:
             ind = np.argmin(np.abs(dp - exp_dp[j]))
             # if not np.isnan(drdt[i, ind]):
             err += (drdt[i, ind] - exp_drdt[j])**2
             cnt += 1
-        rms[i] = np.sqrt(err/cnt)
+        rms[i] = np.nan if cnt == 0 else np.sqrt(err/cnt)
 
     opt_ind = np.nanargmin(rms)
 
-    print("Best fit: alpha = {:.2e}  |  b0 = {:.2e} m  |  w0 = {:.2e}".format(*points[opt_ind]))
+    print("Best fit: alpha = {:.2e}  |  b0 = {:.2e} m  |  w0 = {:.2e}  |  phi0 = {:.3f}".format(*points[opt_ind]))
 
     plt.figure()
     plt.semilogx(exp_dp, exp_drdt, 'o')
+    plt.semilogx(exp_dp[exp_ind], exp_drdt[exp_ind], 'o')
     plt.semilogx(dp, drdt[opt_ind, :], '-k', label="least-squares fit")
     plt.legend()
     plt.show()
 
 
-def melt_rate_curve():
-    fresh_water = True
+def composite_model():
     pm = PlumeModel(**DEFAULT_PARAMETERS)
-    d_p = np.logspace(-6, -0.5, 100)
+    d_p = np.logspace(-6, -0.5, 200)
+    d_pc = 6e-4  # crossover diameter
+    a = 20  # 'sharpness' of transition between parameter sets
 
     drdt = np.zeros(len(d_p))
     phi_errors, conv_errors = 0, 0
     for i in range(len(d_p)):
         pm.d_p = d_p[i]
+
+        for param in ['alpha', 'b0', 'w0', 'phi0']:
+            fac = 1./(1 + np.exp(-a * (np.log10(d_p[i]) - np.log10(d_pc))))
+            new_val = BEST_FIT_SMALL_PARAMETERS[param] + fac * (BEST_FIT_LARGE_PARAMETERS[param]-BEST_FIT_SMALL_PARAMETERS[param])
+            pm.set_parameter(param, new_val)
         try:
             drdt[i] = pm.converge_melt_rate()
         except ArithmeticError:
@@ -167,6 +244,23 @@ def melt_rate_curve():
     print('{:d} errors on phi < 0'.format(phi_errors))
     print('{:d} convergence errors'.format(conv_errors))
 
+    # show factors
+    gprime = 9.81 * (2500-1000)/1000
+    nu = 1e-6  # kinematic viscosity [m2/s]
+    Ga = gprime * d_p**3 / nu**2
+    fac = 1. / (1 + np.exp(-a * (np.log10(d_p) - np.log10(d_pc))))
+
+    plt.semilogx(Ga, fac, lw=3)
+    plt.ylim([0, 1])
+    plt.xlim([1.5e-2, 1.5e8])
+    # plt.show()
+    return d_p, drdt
+
+
+def composite_melt_rate_curve():
+    fresh_water = True
+    model_dp, model_drdt = composite_model()
+
     data = pd.read_csv('data/ablation_experiments.csv')
 
     if fresh_water:
@@ -179,15 +273,16 @@ def melt_rate_curve():
 
     mean_marker = {'fmt': 'o', 'color': '#0398fc', 'mec': 'k', 'markersize': 10, 'label': 'experiments mean', 'capsize': 5, 'capthick': 1}
     single_marker = {'marker': 'o', 'color': '#025F9D', 'markersize': 10, 'alpha': 0.4, 'linestyle': '', 'label': 'experiments'}
-    gprime = 9.81 * (2500-1000)/2500
+    ward_marker = {'markersize': 10, 'linestyle': '', 'mec': 'k', 'mew': 1.5}
+    gprime = 9.81 * (2500-1000)/1000
     nu = 1e-6  # kinematic viscosity [m2/s]
 
     data_means = data.groupby('dp').mean(numeric_only=True)
     data_std = data.groupby('dp').std(numeric_only=True)
     dp = data_means.index.values
-    data_means['Ga'] = gprime * (dp*1e-6)**3 / nu**2
-    Ga_err = np.abs(gprime/nu**2 * (np.vstack([dp - data_means['dp_err'].values, dp + data_means['dp_err'].values])*1e-6)**3 - data_means['Ga'].values)
-    data['Ga'] = gprime * (data['dp']*1e-6)**3 / nu**2
+    data_means['Ga'] = np.sqrt(gprime * (dp*1e-6)**3) / nu
+    Ga_err = np.abs(np.sqrt(gprime * (np.vstack([dp - data_means['dp_err'].values, dp + data_means['dp_err'].values])*1e-6)**3)/nu - data_means['Ga'].values)
+    data['Ga'] = np.sqrt(gprime * (data['dp']*1e-6)**3) / nu
 
     fig, ax = plt.subplots(num=3, figsize=(9, 8))
     ax.set_xscale("log")
@@ -195,11 +290,11 @@ def melt_rate_curve():
     ax.plot(data['Ga'], -data['drdt'] * 1e3, **single_marker)
     ax.errorbar(data_means['Ga'], -data_means['drdt'] * 1e3, xerr=Ga_err, **mean_marker)
     ax.plot([1e-2, 1e9], [-1e3*np.mean(drdt_clear), -1e3*np.mean(drdt_clear)], color='#024D80', lw=1.5)
-    ax.text(3e-2, 1.1*-1e3*np.mean(drdt_clear), 'clear ice', color='#024D80', fontsize=14)
+    ax.text(3e-1, 1.1*-1e3*np.mean(drdt_clear), 'clear ice', color='#024D80', fontsize=14)
 
-    model_Ga = gprime * d_p**3 / nu**2
+    model_Ga = np.sqrt(gprime * model_dp**3) / nu
     # plt.semilogx(model_Ga, -drdt * 1e3, '-k', lw=2, label='model least-squares fit', zorder=5)
-    plt.semilogx(model_Ga, -drdt * 1e3, '-k', lw=2, label='model', zorder=5)
+    plt.semilogx(model_Ga, -model_drdt * 1e3, '-k', lw=2, label='composite model', zorder=5)
 
     with open('data/model_random_parameters_phi00.pkl', 'rb') as f:
         spread_drdt, spread_dp, _ = pickle.load(f)
@@ -210,9 +305,14 @@ def melt_rate_curve():
     # print('{:.2e} < b0 < {:.2e}'.format(min([p[1] for p in points]), max([p[1] for p in points])))
     # print('{:.2e} < phi0 < {:.2e}'.format(min([p[2] for p in points]), max([p[2] for p in points])))
 
-    spread_Ga = gprime * spread_dp ** 3 / nu ** 2
-    for i in range(spread_drdt.shape[0]):
-        plt.semilogx(spread_Ga, -spread_drdt[i, :]*1e3, color='0.5', alpha=0.05, zorder=0)
+    # spread_Ga = gprime * spread_dp ** 3 / nu ** 2
+    # for i in range(spread_drdt.shape[0]):
+    #     plt.semilogx(spread_Ga, -spread_drdt[i, :]*1e3, color='0.5', alpha=0.05, zorder=0)
+
+    Ga_Ward = np.sqrt(gprime * (data_Ward2024['d'] * 1e-3)**3) / nu
+    ax.plot(Ga_Ward, data_Ward2024['w10'], 's', color="#EA33F7", **ward_marker)
+    ax.plot(Ga_Ward, data_Ward2024['w20'], 'o', color="#0000F5", **ward_marker)
+    ax.plot(Ga_Ward, data_Ward2024['w30'], '^', color="#EA3323", **ward_marker)
 
     plt.xlabel('Ga', fontsize=16)
     plt.ylabel('$-\dot{R}$ [mm/s]', fontsize=16)
@@ -220,7 +320,207 @@ def melt_rate_curve():
     plt.legend(fontsize=14)
     plt.tick_params(labelsize=14)
     plt.tight_layout()
-    plt.xlim([1.5e-2, 1.5e8])
+    plt.xlim([2e-2, 1.5e4])
+    plt.ylim([0, None])
+
+    plt.show()
+
+
+def compute_melt_rate_curve(params=DEFAULT_PARAMETERS, use_natural=False, constant_ws=False):
+    pm = PlumeModel(**params)
+    d_p = np.logspace(-6, -0.5, 100)
+
+    pm.constant_ws = constant_ws
+
+    drdt = np.zeros(len(d_p))
+    phi_errors, conv_errors = 0, 0
+    for i in range(len(d_p)):
+        pm.d_p = d_p[i]
+        try:
+            drdt[i] = pm.converge_melt_rate(natural=use_natural)
+        except ArithmeticError:
+            drdt[i] = np.nan
+            phi_errors += 1
+        except ConvergenceError:
+            drdt[i] = np.nan
+            conv_errors += 1
+        print("\r{:d}/{:d}".format(i+1, len(d_p)), end='')
+    print('\ndone!')
+    print('{:d} errors on phi < 0'.format(phi_errors))
+    print('{:d} convergence errors'.format(conv_errors))
+    return d_p, drdt
+
+
+def show_melt_rate_curve():
+    fresh_water = True
+    d_p, drdt0 = compute_melt_rate_curve(BEST_FIT_PARAMETERS)
+    d_p, drdt1 = compute_melt_rate_curve(BEST_FIT_SMALL_PARAMETERS)
+    d_p, drdt2 = compute_melt_rate_curve(BEST_FIT_LARGE_PARAMETERS)
+    data = pd.read_csv('data/ablation_experiments.csv')
+
+    if fresh_water:
+        drdt_clear = data[(data['material'] == 'none') & (data['salinity'] == 0)]['drdt']
+        data = data[(data['material'] == 'glass') & (data['salinity'] == 0)]
+    else:
+        drdt_clear = data[(data['material'] == 'none') & (data['salinity'] > 0)]['drdt']
+        data = data[(data['material'] == 'glass') & (data['salinity'] > 0)]
+    print(drdt_clear.values)
+
+    mean_marker = {'fmt': 'o', 'color': '#0398fc', 'mec': 'k', 'markersize': 10, 'label': 'experiments mean', 'capsize': 5, 'capthick': 1}
+    single_marker = {'marker': 'o', 'color': '#025F9D', 'markersize': 10, 'alpha': 0.4, 'linestyle': '', 'label': 'experiments'}
+    ward_marker = {'markersize': 10, 'linestyle': '', 'mec': 'k', 'mew': 1.5}
+    gprime = 9.81 * (2500-1000)/1000
+    nu = 1e-6  # kinematic viscosity [m2/s]
+
+    data_means = data.groupby('dp').mean(numeric_only=True)
+    data_std = data.groupby('dp').std(numeric_only=True)
+    dp = data_means.index.values
+    data_means['Ga'] = np.sqrt(gprime * (dp*1e-6)**3) / nu
+    Ga_err = np.abs(np.sqrt(gprime * (np.vstack([dp - data_means['dp_err'].values, dp + data_means['dp_err'].values])*1e-6)**3)/nu - data_means['Ga'].values)
+    data['Ga'] = np.sqrt(gprime * (data['dp']*1e-6)**3) / nu
+
+    fig, ax = plt.subplots(num=3, figsize=(9, 8))
+    ax.set_xscale("log")
+
+    ax.plot(data['Ga'], -data['drdt'] * 1e3, **single_marker)
+    ax.errorbar(data_means['Ga'], -data_means['drdt'] * 1e3, xerr=Ga_err, **mean_marker)
+    ax.plot([1e-2, 1e9], [-1e3*np.mean(drdt_clear), -1e3*np.mean(drdt_clear)], color='#024D80', lw=1.5)
+    ax.text(3e-1, 1.1*-1e3*np.mean(drdt_clear), 'clear ice', color='#024D80', fontsize=14)
+
+    model_Ga = np.sqrt(gprime * d_p**3) / nu
+    plt.semilogx(model_Ga, -drdt0 * 1e3, '-k', lw=2, label='model least-squares fit', zorder=5)
+    plt.semilogx(model_Ga, -drdt1 * 1e3, ':', color='0.6', lw=1.6, label='model lsq fit (Ga < 50)', zorder=4)
+    plt.semilogx(model_Ga, -drdt2 * 1e3, '--', color='0.6', lw=1.6, label='model lsq fit (Ga > 50)', zorder=4)
+    # plt.semilogx(model_Ga, -drdt * 1e3, '-k', lw=2, label='model', zorder=5)
+
+    with open('data/model_random_parameters_phi00.pkl', 'rb') as f:
+        spread_drdt, spread_dp, _ = pickle.load(f)
+    # with open('model_random_parameters.pkl', 'rb') as f:
+    #     spread_drdt, spread_dp, points = pickle.load(f)
+
+    # print('{:.2e} < alpha < {:.2e}'.format(min([p[0] for p in points]), max([p[0] for p in points])))
+    # print('{:.2e} < b0 < {:.2e}'.format(min([p[1] for p in points]), max([p[1] for p in points])))
+    # print('{:.2e} < phi0 < {:.2e}'.format(min([p[2] for p in points]), max([p[2] for p in points])))
+
+    # spread_Ga = gprime * spread_dp ** 3 / nu ** 2
+    # for i in range(spread_drdt.shape[0]):
+    #     plt.semilogx(spread_Ga, -spread_drdt[i, :]*1e3, color='0.5', alpha=0.05, zorder=0)
+
+    Ga_Ward = np.sqrt(gprime * (data_Ward2024['d'] * 1e-3)**3) / nu
+    ax.plot(Ga_Ward, data_Ward2024['w10'], 's', color="#EA33F7", **ward_marker)
+    ax.plot(Ga_Ward, data_Ward2024['w20'], 'o', color="#0000F5", **ward_marker)
+    ax.plot(Ga_Ward, data_Ward2024['w30'], '^', color="#EA3323", **ward_marker)
+
+    plt.xlabel(r"Ga=$\sqrt{g'd}/\nu$", fontsize=16)
+    plt.ylabel('$-\dot{R}$ [mm/s]', fontsize=16)
+    # plt.ylim(top=0.5)
+    plt.legend(fontsize=14)
+    plt.tick_params(labelsize=14)
+    plt.tight_layout()
+    plt.xlim([2e-1, 1.5e4])
+    plt.ylim([0, None])
+
+    plt.show()
+
+
+def melt_rates_natural_forced_comparison():
+    fresh_water = True
+    d_p, drdt0 = compute_melt_rate_curve(BEST_FIT_PARAMETERS)
+    d_p, drdt1 = compute_melt_rate_curve(BEST_FIT_PARAMETERS, use_natural=True)
+    data = pd.read_csv('data/ablation_experiments.csv')
+
+    if fresh_water:
+        drdt_clear = data[(data['material'] == 'none') & (data['salinity'] == 0)]['drdt']
+        data = data[(data['material'] == 'glass') & (data['salinity'] == 0)]
+    else:
+        drdt_clear = data[(data['material'] == 'none') & (data['salinity'] > 0)]['drdt']
+        data = data[(data['material'] == 'glass') & (data['salinity'] > 0)]
+    print(drdt_clear.values)
+
+    mean_marker = {'fmt': 'o', 'color': '#0398fc', 'mec': 'k', 'markersize': 10, 'label': 'experiments mean', 'capsize': 5, 'capthick': 1}
+    single_marker = {'marker': 'o', 'color': '#025F9D', 'markersize': 10, 'alpha': 0.4, 'linestyle': '', 'label': 'experiments'}
+    ward_marker = {'markersize': 10, 'linestyle': '', 'mec': 'k', 'mew': 1.5}
+    gprime = 9.81 * (2500-1000)/1000
+    nu = 1e-6  # kinematic viscosity [m2/s]
+
+    data_means = data.groupby('dp').mean(numeric_only=True)
+    data_std = data.groupby('dp').std(numeric_only=True)
+    dp = data_means.index.values
+    data_means['Ga'] = np.sqrt(gprime * (dp*1e-6)**3) / nu
+    Ga_err = np.abs(np.sqrt(gprime * (np.vstack([dp - data_means['dp_err'].values, dp + data_means['dp_err'].values])*1e-6)**3)/nu - data_means['Ga'].values)
+    data['Ga'] = np.sqrt(gprime * (data['dp']*1e-6)**3) / nu
+
+    fig, ax = plt.subplots(num=3, figsize=(9, 8))
+    ax.set_xscale("log")
+
+    ax.plot(data['Ga'], -data['drdt'] * 1e3, **single_marker)
+    ax.errorbar(data_means['Ga'], -data_means['drdt'] * 1e3, xerr=Ga_err, **mean_marker)
+    ax.plot([1e-2, 1e9], [-1e3*np.mean(drdt_clear), -1e3*np.mean(drdt_clear)], color='#024D80', lw=1.5)
+    ax.text(3e-1, 1.1*-1e3*np.mean(drdt_clear), 'clear ice', color='#024D80', fontsize=14)
+
+    model_Ga = np.sqrt(gprime * d_p**3) / nu
+    plt.semilogx(model_Ga, -drdt0 * 1e3, '-k', lw=2, label='forced convection', zorder=5)
+    plt.semilogx(model_Ga, -drdt1 * 1e3, '-', color='0.6', lw=1.6, label='natural convection', zorder=4)
+    # plt.semilogx(model_Ga, -drdt * 1e3, '-k', lw=2, label='model', zorder=5)
+
+    plt.xlabel(r"Ga=$\sqrt{g'd}/\nu$", fontsize=16)
+    plt.ylabel('$-\dot{R}$ [mm/s]', fontsize=16)
+    # plt.ylim(top=0.5)
+    plt.legend(fontsize=14)
+    plt.tick_params(labelsize=14)
+    plt.tight_layout()
+    plt.xlim([2e-1, 1.5e4])
+    plt.ylim([0, None])
+
+    plt.show()
+
+
+def melt_rates_ws_comparison():
+    fresh_water = True
+    d_p, drdt0 = compute_melt_rate_curve(BEST_FIT_PARAMETERS, constant_ws=True)
+    d_p, drdt1 = compute_melt_rate_curve(BEST_FIT_SMALL_PARAMETERS)
+    d_p, drdt2 = compute_melt_rate_curve(BEST_FIT_PARAMETERS, constant_ws=False)
+    data = pd.read_csv('data/ablation_experiments.csv')
+
+    if fresh_water:
+        drdt_clear = data[(data['material'] == 'none') & (data['salinity'] == 0)]['drdt']
+        data = data[(data['material'] == 'glass') & (data['salinity'] == 0)]
+    else:
+        drdt_clear = data[(data['material'] == 'none') & (data['salinity'] > 0)]['drdt']
+        data = data[(data['material'] == 'glass') & (data['salinity'] > 0)]
+    print(drdt_clear.values)
+
+    mean_marker = {'fmt': 'o', 'color': '#0398fc', 'mec': 'k', 'markersize': 10, 'label': 'experiments mean', 'capsize': 5, 'capthick': 1}
+    single_marker = {'marker': 'o', 'color': '#025F9D', 'markersize': 10, 'alpha': 0.4, 'linestyle': '', 'label': 'experiments'}
+    gprime = 9.81 * (2500-1000)/1000
+    nu = 1e-6  # kinematic viscosity [m2/s]
+
+    data_means = data.groupby('dp').mean(numeric_only=True)
+    data_std = data.groupby('dp').std(numeric_only=True)
+    dp = data_means.index.values
+    data_means['Ga'] = np.sqrt(gprime * (dp*1e-6)**3) / nu
+    Ga_err = np.abs(np.sqrt(gprime * (np.vstack([dp - data_means['dp_err'].values, dp + data_means['dp_err'].values])*1e-6)**3)/nu - data_means['Ga'].values)
+    data['Ga'] = np.sqrt(gprime * (data['dp']*1e-6)**3) / nu
+
+    fig, ax = plt.subplots(num=3, figsize=(9, 8))
+    ax.set_xscale("log")
+
+    ax.plot(data['Ga'], -data['drdt'] * 1e3, **single_marker)
+    ax.errorbar(data_means['Ga'], -data_means['drdt'] * 1e3, xerr=Ga_err, **mean_marker)
+    ax.plot([1e-2, 1e9], [-1e3*np.mean(drdt_clear), -1e3*np.mean(drdt_clear)], color='#024D80', lw=1.5)
+    ax.text(3e-1, 1.1*-1e3*np.mean(drdt_clear), 'clear ice', color='#024D80', fontsize=14)
+
+    model_Ga = np.sqrt(gprime * d_p**3) / nu
+    plt.semilogx(model_Ga, -drdt0 * 1e3, '-k', lw=2, label='constant ws', zorder=5)
+    plt.semilogx(model_Ga, -drdt1 * 1e3, ':', color='0.6', lw=1.6, label='constant ws (Ga < 50)', zorder=4)
+    plt.semilogx(model_Ga, -drdt2 * 1e3, '--', color='0.6', lw=1.6, label='height-averaged ws', zorder=4)
+
+    plt.xlabel(r"Ga=$\sqrt{g'd}/\nu$", fontsize=16)
+    plt.ylabel('$-\dot{R}$ [mm/s]', fontsize=16)
+    plt.legend(fontsize=14)
+    plt.tick_params(labelsize=14)
+    plt.tight_layout()
+    plt.xlim([2e-1, 1.5e4])
     plt.ylim([0, None])
 
     plt.show()
@@ -231,17 +531,20 @@ def average_phi_curve():
     d_p = np.logspace(-6, -1, 50)
 
     phi_bar = np.zeros(len(d_p))
+    drdt = np.zeros(len(d_p))
     phi_errors, conv_errors = 0, 0
     for i in range(len(d_p)):
         pm.d_p = d_p[i]
         try:
-            pm.converge_melt_rate()
+            drdt[i] = pm.converge_melt_rate()
             phi = pm.compute_quantities('phi')
             phi_bar[i] = np.sum(phi * np.abs(np.diff(pm.z))) / pm.H
         except ArithmeticError:
+            drdt[i] = np.nan
             phi_bar[i] = np.nan
             phi_errors += 1
         except ConvergenceError:
+            drdt[i] = np.nan
             phi_bar[i] = np.nan
             conv_errors += 1
         print("\r{:d}/{:d}".format(i+1, len(d_p)), end='')
@@ -249,8 +552,22 @@ def average_phi_curve():
     print('{:d} errors on phi < 0'.format(phi_errors))
     print('{:d} convergence errors'.format(conv_errors))
 
-    plt.semilogx(d_p, phi_bar)
+    color1 = (0, 0.4, 0.7)
+    color2 = (0.7, 0, 0)
+
+    plt.semilogx(d_p, phi_bar, color=color1)
     plt.ylim([0, None])
+    plt.ylabel("$\overline{\phi}$", fontsize=14, color=color1)
+    plt.tick_params(labelsize=12)
+    plt.tick_params(color=color1, labelcolor=color1, axis='y')
+    plt.xlabel("$d_p$ (m)", fontsize=14)
+
+    ax2 = plt.gca().twinx()
+    ax2.semilogx(d_p, -drdt*1e3, color=color2)
+    ax2.set_ylabel("$-\dot{R}$ (mm/s)", fontsize=14, color=color2)
+    ax2.tick_params(color=color2, labelcolor=color2, labelsize=12)
+    ax2.set_ylim([0, None])
+    plt.tight_layout()
     plt.show()
 
 
@@ -425,7 +742,6 @@ def multiple_parameter_dependence():
     plt.show()
 
 
-
 def all_parameter_dependence(pickled=False):
     if not pickled:
         pm = PlumeModel(**DEFAULT_PARAMETERS)
@@ -496,262 +812,6 @@ def all_parameter_dependence(pickled=False):
     plt.legend()
     plt.tight_layout()
     plt.show()
-
-
-def parameter_dependence_4d(pickled=False):
-    if not pickled:
-        pm = PlumeModel(**DEFAULT_PARAMETERS)
-
-        d_p = np.logspace(-6, -1, 30)
-
-        N = 10
-        a_arr = np.logspace(-5, 0, N)
-        b_arr = np.logspace(-8, -1, N)
-        w_arr = np.logspace(-5, 0, N)
-        p_arr = np.linspace(0, 0.6, N)
-        points = [[a, b, w, p] for a in a_arr for b in b_arr for w in w_arr for p in p_arr]
-
-        drdt = np.zeros((len(points), len(d_p)))
-        phi_errors, conv_errors = 0, 0
-        st = time.time()
-        last10ticks = np.zeros(10)
-        tick_ind = 0
-        for j in range(len(points)):
-            pm.set_parameter('alpha', points[j][0])
-            pm.set_parameter('b0', points[j][1])
-            pm.set_parameter('w0', points[j][2])
-            pm.set_parameter('phi0', points[j][3])
-            st2 = time.time()
-            for i in range(len(d_p)):
-                pm.d_p = d_p[i]
-                try:
-                    drdt[j, i] = pm.converge_melt_rate()
-                except ArithmeticError:
-                    drdt[j, i] = np.nan
-                    phi_errors += 1
-                except ConvergenceError:
-                    drdt[j, i] = np.nan
-                    conv_errors += 1
-            sec_left = (time.time() - st) * (len(points) / (j+1) - 1)
-            last10ticks[tick_ind] = time.time() - st2
-            tick_ind = (tick_ind + 1) % len(last10ticks)
-            tm_str = "done in {:02d}:{:02d}:{:02d} (tick: {:d} ms)".format(int(sec_left/3600), int((sec_left % 3600)/60), int(sec_left%60), int(np.mean(last10ticks)*1000))
-            print("\r{:d}/{:d} | {:s}".format(j+1, len(points), tm_str), end='')
-        print('\ndone!')
-        print('{:d} errors on phi < 0'.format(phi_errors))
-        print('{:d} convergence errors'.format(conv_errors))
-
-        with open('data/model_4d.pkl', 'wb') as f:
-            pickle.dump([drdt, d_p, points], f)
-    else:
-        with open('data/model_4d.pkl', 'rb') as f:
-            drdt, d_p, points = pickle.load(f)
-
-    min_idx = np.nanargmin(np.mean(np.abs(drdt), axis=1))
-    max_idx = np.nanargmax(np.mean(np.abs(drdt), axis=1))
-
-    # non_nan_drdt = np.array([drdt[j, :] for j in range(drdt.shape[0]) if not np.any(np.isnan(drdt[j, :]))])
-
-    plt.figure()
-    for j in range(len(points)):
-        plt.semilogx(d_p, -drdt[j, :] * 1e3, color='0.5', alpha=0.05)
-    # plt.semilogx(d_p, -np.nanmean(non_nan_drdt, axis=0) * 1e3, color='k', lw=2, label='mean')
-    plt.semilogx(d_p, -drdt[min_idx, :] * 1e3, color=(0, 0, 0.6), lw=1.5, label='min')
-    plt.semilogx(d_p, -drdt[max_idx, :] * 1e3, color=(0.6, 0, 0), lw=1.5, label='max')
-
-    min_text = r'($\alpha = {:.2f}$, $b_0 = {:.1e}$, $w_0 = {:.2f}$)'.format(*points[min_idx])
-    max_text = r'($\alpha = {:.2f}$, $b_0 = {:.1e}$, $w_0 = {:.2f}$)'.format(*points[max_idx])
-    plt.text(1e-6, 0.05, min_text, color=(0, 0, 0.6))
-    plt.text(1e-6, 0.28, max_text, color=(0.6, 0, 0))
-
-    print(points[min_idx])
-    print(points[max_idx])
-
-    plt.ylabel('-dR/dt (mm/s)')
-    plt.xlabel('$d_p$ (m)')
-    plt.ylim([0, 0.3])
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-
-def is_there_a_maximum():
-    with open('data/model_4d.pkl', 'rb') as f:
-        drdt, d_p, points = pickle.load(f)
-
-    alpha_arr = np.sort(np.unique([p[0] for p in points]))
-    b0_arr = np.sort(np.unique([p[1] for p in points]))
-    w0_arr = np.sort(np.unique([p[2] for p in points]))
-    phi0_arr = np.sort(np.unique([p[3] for p in points]))
-
-    max_dp = np.nan * np.zeros((len(alpha_arr), len(b0_arr), len(w0_arr), len(phi0_arr)))
-    indices = np.zeros((len(alpha_arr), len(b0_arr), len(w0_arr), len(phi0_arr)), dtype=np.int32)
-    for n in range(len(points)):
-        nn_ind = np.where(~np.isnan(drdt[n, :]))[0]
-        if len(nn_ind) > 2:
-            first, last, in_between = np.abs(drdt[n, nn_ind[0]]), np.abs(drdt[n, nn_ind[-1]]), np.abs(drdt[n, nn_ind[1:-1]])
-            if np.any(in_between > first) and np.any(in_between > last):
-                i = np.argmin(np.abs(points[n][0] - alpha_arr))
-                j = np.argmin(np.abs(points[n][1] - b0_arr))
-                k = np.argmin(np.abs(points[n][2] - w0_arr))
-                l = np.argmin(np.abs(points[n][3] - phi0_arr))
-                max_dp[i, j, k, l] = d_p[np.nanargmax(np.abs(drdt[n, :]))]
-                indices[i, j, k, l] = n
-
-    # # Single slice
-    # k, l = 0, 1
-    # plt.figure()
-    # extent = (np.log10(b0_arr[0]), np.log10(b0_arr[-1]), np.log10(alpha_arr[0]), np.log10(alpha_arr[-1]))
-    # plt.imshow(np.flipud(max_dp[:, :, k, l]), extent=extent)
-    # xt = list(range(int(extent[0]), int(extent[1]+1)))
-    # plt.xticks(xt, ["$10^{"+"{:d}".format(val) + "}$" for val in xt])
-    # yt = list(range(int(extent[2]), int(extent[3]+1)))
-    # plt.yticks(yt, ["$10^{"+"{:d}".format(val) + "}$" for val in yt])
-    # plt.tick_params(labelsize=12)
-    # plt.xlabel('$b_0$ (m)', fontsize=14)
-    # plt.ylabel(r'$\alpha$', fontsize=14)
-    # plt.title("$w_0 = {:.1e}$ m/s  |  $\phi_0 = {:.2f}$".format(w0_arr[k], phi0_arr[l]))
-    #
-    # plt.figure()
-    # i = -1
-    # for j in range(len(b0_arr)):
-    #     n = indices[i, j, k, l]
-    #     plt.semilogx(d_p, -drdt[n, :]*1e3, label="$b_0 = {:.1e}$ m".format(b0_arr[j]))
-    # plt.title(r"$\alpha = {:.1e}$".format(alpha_arr[i]))
-    # plt.legend()
-    # plt.show()
-
-    # All slices
-    delta = 2  # Show every delta-th slice in k and l
-    cmc.show_cmaps()
-    cmap = cmo.matter_r
-
-    K, L = list(range(0, len(w0_arr), delta)), list(range(0, len(phi0_arr), delta))
-
-    fig, axes = plt.subplots(len(K), len(L), figsize=[14, 9])
-    extent = (np.log10(b0_arr[0]), np.log10(b0_arr[-1]), np.log10(alpha_arr[0]), np.log10(alpha_arr[-1]))
-
-    for ki in range(len(K)):
-        for li in range(len(L)):
-            im = axes[ki, li].imshow(np.flipud(np.log10(max_dp[:, :, K[ki], L[li]])), extent=extent, vmin=-6, vmax=-2, cmap=cmap)
-            axes[ki, li].tick_params(left=li==0, labelleft=li==0, bottom=ki==len(K)-1, labelbottom=ki==len(K)-1, labelsize=12)
-            axes[ki, li].set_facecolor('0.8')
-            axes[ki, li].set_xlim([-7, -1])
-    xt = [-6, -4, -2]  #list(range(int(extent[0]), int(extent[1]+1)))
-    yt = [-4, -2, 0]  #list(range(int(extent[2]), int(extent[3]+1)))
-    for ki in range(len(K)):
-        axes[ki, 0].set_yticks(yt, ["$10^{" + "{:d}".format(val) + "}$" for val in yt])
-        # axes[ki, 0].set_ylabel(r"$\alpha$", fontsize=12)
-        axes[ki, -1].yaxis.set_label_position("right")
-        w0 = w0_arr[K[ki]]
-        w0_exp = int(np.floor(np.log10(w0)))
-        # axes[ki, -1].set_ylabel('$w_0 = {:.1f}'.format(w0*10**(-w0_exp))+'\cdot 10^{'+"{:d}".format(w0_exp)+'}$ m/s',
-        #                         fontsize=10, rotation=270, labelpad=20)
-        axes[ki, -1].set_ylabel('$w_0 = 10^{' + "{:d}".format(w0_exp) + '}$ m/s',
-                                fontsize=12, rotation=270, labelpad=20)
-    for li in range(len(L)):
-        axes[-1, li].set_xticks(xt, ["$10^{"+"{:d}".format(val) + "}$" for val in xt])
-        # axes[-1, li].set_xlabel("$b_0$ (m)", fontsize=12)
-        axes[0, li].set_title("$\phi_0 = {:.2f}$".format(phi0_arr[L[li]]), fontsize=12)
-    fig.supxlabel('$b_0$ (m)', fontsize=16)
-    fig.supylabel(r'$\alpha$', fontsize=16)
-    fig.tight_layout()
-    cb = fig.colorbar(im, ax=axes, shrink=0.8, pad=0.07)
-    cb.ax.set_title("$d_p^*$ (m)\n", fontsize=12)
-    cbt = [-6.5, -6.25] + list(range(-6, -1))
-    cbtl = ["$10^{"+"{:.0f}".format(val)+"}$" for val in cbt]
-    cbtl[0] = ""
-    cbtl[1] = "no maximum"
-    cb.set_ticks(cbt, labels=cbtl)
-    cb.ax.tick_params(labelsize=12)
-    cb.ax.set_facecolor('0.8')
-
-    plt.show()
-
-
-def is_model_stable():
-    with open('data/model_4d.pkl', 'rb') as f:
-        drdt, d_p, points = pickle.load(f)
-
-    alpha_arr = np.sort(np.unique([p[0] for p in points]))
-    b0_arr = np.sort(np.unique([p[1] for p in points]))
-    w0_arr = np.sort(np.unique([p[2] for p in points]))
-    phi0_arr = np.sort(np.unique([p[3] for p in points]))
-
-    stability = np.zeros((len(alpha_arr), len(b0_arr), len(w0_arr), len(phi0_arr)))
-    indices = np.zeros((len(alpha_arr), len(b0_arr), len(w0_arr), len(phi0_arr)), dtype=np.int32)
-    for n in range(len(points)):
-        i = np.argmin(np.abs(points[n][0] - alpha_arr))
-        j = np.argmin(np.abs(points[n][1] - b0_arr))
-        k = np.argmin(np.abs(points[n][2] - w0_arr))
-        l = np.argmin(np.abs(points[n][3] - phi0_arr))
-        stability[i, j, k, l] = np.sum(~np.isnan(drdt[n, :])) / len(d_p)
-        indices[i, j, k, l] = n
-
-    # # Single slice
-    # k, l = 0, 1
-    # plt.figure()
-    # extent = (np.log10(b0_arr[0]), np.log10(b0_arr[-1]), np.log10(alpha_arr[0]), np.log10(alpha_arr[-1]))
-    # plt.imshow(np.flipud(max_dp[:, :, k, l]), extent=extent)
-    # xt = list(range(int(extent[0]), int(extent[1]+1)))
-    # plt.xticks(xt, ["$10^{"+"{:d}".format(val) + "}$" for val in xt])
-    # yt = list(range(int(extent[2]), int(extent[3]+1)))
-    # plt.yticks(yt, ["$10^{"+"{:d}".format(val) + "}$" for val in yt])
-    # plt.tick_params(labelsize=12)
-    # plt.xlabel('$b_0$ (m)', fontsize=14)
-    # plt.ylabel(r'$\alpha$', fontsize=14)
-    # plt.title("$w_0 = {:.1e}$ m/s  |  $\phi_0 = {:.2f}$".format(w0_arr[k], phi0_arr[l]))
-    #
-    # plt.figure()
-    # i = -1
-    # for j in range(len(b0_arr)):
-    #     n = indices[i, j, k, l]
-    #     plt.semilogx(d_p, -drdt[n, :]*1e3, label="$b_0 = {:.1e}$ m".format(b0_arr[j]))
-    # plt.title(r"$\alpha = {:.1e}$".format(alpha_arr[i]))
-    # plt.legend()
-    # plt.show()
-
-    # All slices
-    delta = 2  # Show every delta-th slice in k and l
-    # cmc.show_cmaps()
-    cmap = plt.get_cmap('RdYlGn_r')
-
-    K, L = list(range(0, len(w0_arr), delta)), list(range(0, len(phi0_arr), delta))
-
-    fig, axes = plt.subplots(len(K), len(L), figsize=[14, 9])
-    extent = (np.log10(b0_arr[0]), np.log10(b0_arr[-1]), np.log10(alpha_arr[0]), np.log10(alpha_arr[-1]))
-
-    for ki in range(len(K)):
-        for li in range(len(L)):
-            im = axes[ki, li].imshow(np.flipud(100*(1-stability[:, :, K[ki], L[li]])), extent=extent, vmin=0, vmax=100, cmap=cmap)
-            axes[ki, li].tick_params(left=li==0, labelleft=li==0, bottom=ki==len(K)-1, labelbottom=ki==len(K)-1, labelsize=12)
-            axes[ki, li].set_facecolor('0.8')
-            axes[ki, li].set_xlim([-7, -1])
-    xt = [-6, -4, -2]  #list(range(int(extent[0]), int(extent[1]+1)))
-    yt = [-4, -2, 0]  #list(range(int(extent[2]), int(extent[3]+1)))
-    for ki in range(len(K)):
-        axes[ki, 0].set_yticks(yt, ["$10^{" + "{:d}".format(val) + "}$" for val in yt])
-        # axes[ki, 0].set_ylabel(r"$\alpha$", fontsize=12)
-        axes[ki, -1].yaxis.set_label_position("right")
-        w0 = w0_arr[K[ki]]
-        w0_exp = int(np.floor(np.log10(w0)))
-        # axes[ki, -1].set_ylabel('$w_0 = {:.1f}'.format(w0*10**(-w0_exp))+'\cdot 10^{'+"{:d}".format(w0_exp)+'}$ m/s',
-        #                         fontsize=10, rotation=270, labelpad=20)
-        axes[ki, -1].set_ylabel('$w_0 = 10^{' + "{:d}".format(w0_exp) + '}$ m/s',
-                                fontsize=12, rotation=270, labelpad=20)
-    for li in range(len(L)):
-        axes[-1, li].set_xticks(xt, ["$10^{"+"{:d}".format(val) + "}$" for val in xt])
-        # axes[-1, li].set_xlabel("$b_0$ (m)", fontsize=12)
-        axes[0, li].set_title("$\phi_0 = {:.2f}$".format(phi0_arr[L[li]]), fontsize=12)
-    fig.supxlabel('$b_0$ (m)', fontsize=16)
-    fig.supylabel(r'$\alpha$', fontsize=16)
-    fig.tight_layout()
-    cb = fig.colorbar(im, ax=axes, shrink=0.8, pad=0.07)
-    cb.ax.set_title("% NaN", fontsize=12)
-    cb.ax.tick_params(labelsize=12)
-
-    plt.show()
-
 
 
 def profiles():

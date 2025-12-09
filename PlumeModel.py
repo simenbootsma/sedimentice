@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.integrate import odeint
 
 
 class PlumeModel:
@@ -31,6 +32,8 @@ class PlumeModel:
         self.w_a = w_a
         self.dRdt = dRdt
         self.d_p = d_p
+
+        self.constant_ws = False
 
         # Initial conditions
         self.b0 = b0
@@ -98,7 +101,8 @@ class PlumeModel:
         phi[0] = self.phi0
         rho[0] = rho_water(self.T0, self.S0)
 
-        ws0 = settling_velocity(self.d_p, self.T0, self.S0, self.rho_p)
+        ws_const = settling_velocity(self.d_p, self.T0, self.S0, self.rho_p)
+        ws0 = ws_const if self.constant_ws else 0
         F_f[0] = self.b0 * self.w0 * (1 - self.phi0)
         F_p[0] = self.b0 * (self.w0 + ws0) * self.phi0
         F_M[0] = self.b0 * self.w0 ** 2 * (1 - self.phi0) + self.b0 * (self.w0 + ws0) ** 2 * self.phi0 * self.rho_p / self.rho_inf
@@ -125,11 +129,12 @@ class PlumeModel:
             F_S[i + 1] = F_S[i] + dF_S_dz * dz
 
             # Update variables
+            ws = ws_const if self.constant_ws else -settling_velocity_at_z(self.d_p, T[i], S[i], self.rho_p, self.z[i])
             S[i + 1] = F_S[i + 1] / F_f[i + 1]
             T[i + 1] = F_T[i + 1] / (F_f[i + 1] + F_p[i + 1] * self.rho_p / self.rho_inf * self.c_p_p / self.c_p_f)
-            w[i + 1] = (F_M[i + 1] - F_p[i + 1] * self.rho_p / self.rho_inf * ws0) / (
+            w[i + 1] = (F_M[i + 1] - F_p[i + 1] * self.rho_p / self.rho_inf * ws) / (
                         F_f[i + 1] + F_p[i + 1] * self.rho_p / self.rho_inf)
-            phi[i + 1] = 1 / (1 + F_f[i + 1] / F_p[i + 1] * (1 + ws0 / w[i + 1]))
+            phi[i + 1] = 1 / (1 + F_f[i + 1] / F_p[i + 1] * (1 + ws / w[i + 1]))
             b[i + 1] = F_f[i + 1] / (1 - phi[i + 1]) / w[i + 1]
             rho[i + 1] = rho_water(T[i + 1], S[i + 1])
 
@@ -146,7 +151,7 @@ class PlumeModel:
         while abs((dRdt - prev_dRdt)/dRdt0) > eps:
             prev_dRdt = dRdt
             self.dRdt = dRdt
-            _, w, _, T, S = self.integrate()
+            _, w, phi, T, S = self.integrate()
 
             # # Based on average Nu
             # prefac = -0.332 * self.Pr**(1/3) * self.k * (self.T_inf - self.T_i) / ((1-self.phi_s) * self.rho_s * self.lat_heat * self.H**3 * np.sqrt(self.nu))
@@ -155,17 +160,20 @@ class PlumeModel:
 
             z = (self.z[1:] + self.z[:-1]) / 2
             if natural:
-                rho = rho_water(T+273.15, S)
-                Ra = self.g * np.abs(self.rho_inf - rho)/self.rho_inf * np.abs(z)**3 / (self.nu**2) * self.Pr
+                # Bejan equation 7.51 (page 347)
+                rho_f = rho_water(T+273.15, S)
+                rho_plume = rho_f * (1-phi) + self.rho_p * phi
+                Ra = self.g * np.abs(self.rho_inf - rho_plume)/self.rho_inf * np.abs(z)**3 / (self.nu**2) * self.Pr
                 prefac = -0.503*(self.Pr/(self.Pr+0.986*self.Pr**(1/2) + 0.492))**(1/4) * self.k * (T+273.15 - self.T_i) / ((1-self.phi_s) * self.rho_s * self.lat_heat * self.H)
                 dRdt = np.sum(prefac * Ra**(1/4) * np.abs(np.diff(self.z)))
             else:
+                # Bejan equation 5.83 (page 244)
                 # Based on local Nu
                 # prefac = -0.332 * self.Pr**(1/3) * self.k * (T+273.15 - self.T_i) / ((1-self.phi_s) * self.rho_s * self.lat_heat * self.H * np.sqrt(self.nu))
                 prefac = -0.332 * self.Pr ** (1 / 3) * self.k * (self.T_inf - self.T_i) / (
                             (1 - self.phi_s) * self.rho_s * self.lat_heat * self.H * np.sqrt(self.nu))  # Based on ambient temperature, same as Bejan
                 dRdt = np.sum(prefac * np.sqrt(w/np.abs(z)) * np.abs(np.diff(self.z)))
-            if cnt > 10:
+            if cnt > 20:
                 raise ConvergenceError("[PlumeModel.converge_melt_rate] Could not converge")
             cnt += 1
         return dRdt
@@ -176,24 +184,23 @@ class PlumeModel:
         if q is None:
             return result
         if type(q) is str:
-            assert q in qnames, "invalid quantity name"
+            assert q in qnames, "invalid quantity name, possible: " + ", ".join(qnames)
             return result[qnames.index(q)]
         if type(q) is list:
-            assert all([qq in qnames for qq in q]), "invalid quantity name"
+            assert all([qq in qnames for qq in q]), "invalid quantity name, possible: " + ", ".join(qnames)
             return [result[qnames.index(qq)] for qq in q]
 
     def compute_fluxes(self, f=None):
-        fnames = ['w', 'b', 'phi', 'T', 'S']
+        fnames = ['Fp', 'Ff', 'Fm', 'FT', 'FS']
         result = self.integrate(return_fluxes=True)
         if f is None:
             return result
         if type(f) is str:
-            assert f in fnames, "invalid flux name"
+            assert f in fnames, "invalid flux name, possible: "+", ".join(fnames)
             return result[fnames.index(f)]
         if type(f) is list:
-            assert all([ff in fnames for ff in f]), "invalid quantity name"
+            assert all([ff in fnames for ff in f]), "invalid flux name, possible: "+", ".join(fnames)
             return [result[fnames.index(ff)] for ff in f]
-
 
 class ConvergenceError(Exception):
     def __init__(self, msg):
@@ -211,6 +218,46 @@ def settling_velocity(d_p, temp, sal, rho_p):
     C2 = 0.4
     Vst = (R*g*d_p**2)/(C1*nu_f+np.sqrt(0.75*C2*R*g*d_p**3))
     return Vst
+
+
+def settling_velocity_at_z(d_p, temp, sal, rho_p, z, v0=0.):
+    """ Here we assume the amount of particles falling to be the same at any height z"""
+    z = -np.abs(z)
+    rho_f = rho_water(temp, sal)
+    R = (rho_p - rho_f) / rho_f
+    g = 9.81  # m/s^2
+    C1 = 18  # -
+    C2 = 0.4  # -
+    nu = 1e-6  # m^2/s
+    Cd = (2*C1*nu/np.sqrt(3*R*g*d_p**3) + np.sqrt(C2))**2
+    a = 3*Cd/(4*(R+1)*d_p)
+    b = R/(R+1)*g
+    arg = -v0*np.sqrt(a/b)
+    if arg < -1 or arg > 1:
+        return np.nan
+    c = np.arctanh(arg) / np.sqrt(a*b)
+    d = c*np.sqrt(a*b)
+    if -a*z > 50:
+        # prevent overflow in exponent
+        ach = -a*z + np.log(2*np.cosh(d))
+    else:
+        ach = np.arccosh(np.exp(-a*z)*np.cosh(d))
+    wz = np.sqrt(b/a)/(a*z) * (ach - np.tanh(ach) - np.tanh(d) - d)
+    return wz
+
+
+def velocity_fc2004(t, dp, rho_f, rho_p, v0=0):
+    R = (rho_p - rho_f) / rho_f
+    Rrho = 1 / (R + 1)
+    g = 9.81  # m/s^2
+    C1 = 18  # -
+    C2 = 0.4  # -
+    nu = 1e-6  # m^2/s
+    Cd = (2*C1*nu/np.sqrt(3*R*g*dp**3) + np.sqrt(C2))**2
+    a = 3/4*Rrho*Cd/dp
+    b = -(Rrho-1)*g
+    c = np.arctanh(-v0*np.sqrt(a/b))
+    return -np.sqrt(b/a) * np.tanh(np.sqrt(a*b)*(t + c))
 
 
 def rho_water(temp, sal):
