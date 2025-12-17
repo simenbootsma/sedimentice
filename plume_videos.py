@@ -9,6 +9,7 @@ from scipy.signal import fftconvolve, correlate2d, convolve2d
 from scipy.integrate import odeint
 from typing import Union
 import cmocean.cm as cmo
+from scipy.stats import linregress
 
 import pandas as pd
 
@@ -16,57 +17,109 @@ from PlumeModel import settling_velocity, rho_water, settling_velocity_at_z
 
 matplotlib.use('Qt5Agg')
 
-ccal = {'1mm': 93.0, '3mm': 109.5, '375um': 103.0, '200um': 103.0, '4mm': 139.4, '2mm': 139.4, '90um': 139.4,
-        '4mm_end': 139.4, '8mm': 115.0, '875um': 115.0}  # calibration constant in um/px, 2*sigma uncertainty order 1 um/px
-bottom = {'1mm': 1600, '3mm': 1680, '375um': 1520, '200um': 1750, '4mm': 1400, '2mm': 1450, '90um': 1450, '4mm_end': 1550,
-          '8mm': 1330, '875um': 1450}
-top = {'375um': 300, '200um': 250, '1mm': 250, '3mm': 300, '4mm': 400, '2mm': 400, '90um': 600, '4mm_end': 1150,
-       '8mm': 200, '875um': 200}
-xmid = {'1mm': 550, '2mm': 520, '3mm': 570, '4mm': 580, '375um': 560, '200um': 500, '90um': 525, '8mm': 530, '875um': 575}
-top_ice = {'1mm': 450, '2mm': 560, '3mm': 520, '4mm': 550, '375um': 420, '200um': 469, '90um': 740, '8mm': 330, '875um': 380}
+ccal = {'1mm': 93.0, '3mm': 109.5, '375um': 103.0, '200um': 103.0, '4mm': 139.4, '2mm': 139.4, '90um_old': 139.4,
+        '4mm_end': 139.4, '8mm': 115.0, '875um': 115.0, '90um': 127.8, '55um': 117.3}  # calibration constant in um/px, 2*sigma uncertainty order 1 um/px
+bottom = {'1mm': 1600, '3mm': 1680, '375um': 1520, '200um': 1750, '4mm': 1400, '2mm': 1450, '90um_old': 1450, '4mm_end': 1550,
+          '8mm': 1330, '875um': 1450, '55um': 1300, '90um': 1300}
+top = {'375um': 300, '200um': 250, '1mm': 250, '3mm': 300, '4mm': 400, '2mm': 400, '90um_old': 600, '4mm_end': 1150,
+       '8mm': 200, '875um': 200, '55um': 100, '90um': 200}
+xmid = {'1mm': 550, '2mm': 520, '3mm': 570, '4mm': 580, '375um': 560, '200um': 500, '90um_old': 525, '8mm': 530,
+        '875um': 575, '55um': 560, '90um': 520}
+top_ice = {'1mm': 450, '2mm': 560, '3mm': 520, '4mm': 550, '375um': 420, '200um': 469, '90um_old': 740, '8mm': 330,
+           '875um': 380, '55um': 450, '90um': 380}
 folder = '/Users/simenbootsma/Documents/PhD/Work/SedimentIce/plumeVideos/'
 
 
 def main():
-    # cloud = generate_particle_cloud('4mm', debug=False)
-
-    # plt.hist(cloud[:, 1])
-    # plt.show()
-
-    # for sz in xmid:
-        # compute_width_and_height(sz, debug=False)
-        # plot_width_and_height_over_time(sz)
-    #     extract_contours(sz)
-
-    # for sz in ['8mm', '875um']:
-    #     compute_breadth_from_tracks(sz, debug=False)
-    # show_frame('90um', 5000)
-    # compare_breadth()
-    # generate_particle_cloud('875um', debug=True)
-    # particle_velocity_profiles()
+    # breadth_profiles()
+    # velocity_profiles()
+    # phi_profiles()
     # particle_track_curvature()
     particle_velocity()
+    # plot_ablation_rates()
 
-    # compute_breadth_heatmap('200um', debug=False)
-    # compute_breadth_heatmap('375um', debug=False)
+    # velocity_from_ablation_rate_test()
+    # vel_profile_settling_comparison()
 
-    sz = '8mm'
-    # compute_width_and_height(sz)
-    # show_piv_test(sz)
-    # compute_breadth_from_tracks(sz, debug=True)
-    # show_breadth(sz)
-    # compute_breadth_heatmap(sz, debug=False)
+    sz = '90um'
+    # show_frame(sz, 0)
+
+    # # Contours
+    # extract_contours(sz, debug=False)
+    # remove_holder_from_contours(sz)
     # animate_contours(sz)
+    # compute_width_and_height(sz, debug=False)
+    # plot_width_and_height_over_time(sz)
+
+    # # Breadth
+    # compute_breadth_from_tracks(sz, debug=True)
+    # compute_breadth_heatmap(sz, debug=False)
+    # show_breadth(sz)
+
+    # # Velocity - correlation
     # piv_sides(sz, debug=False)
-    # extract_contours(sz)
-    # piv(sz)
-    # random_particle_image_checks(sz, n=10)
+    # show_piv_test(sz)
+
+    # # Velocity - tracking
     # cloud = generate_particle_cloud(sz, debug=False)
     # tracks = tracks_from_particle_cloud(cloud, debug=False)
     # save_tracks_as_csv(sz, cloud, tracks)
     # analyse_tracks(sz)
     # add_tracks_to_video(sz)
-    # random_particle_image_checks(30)
+
+    # # Ablation rate profile
+    # ablation_rate_profiles(sz)
+
+
+def velocity_from_ablation_rate_test():
+    with open('plumeVideoAblationRateProfiles.pkl', 'rb') as f:
+        abr_dct = pickle.load(f)
+
+    sizes = ['90um', '200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+    cmap = cmo.dense
+    fig, ax = plt.subplots(1, len(sizes), figsize=(16, 8))
+    with open('velocity_profiles.pkl', 'rb') as f:
+        velocity_dct = pickle.load(f)
+
+    for i, sz in enumerate(sizes):
+        dp = float(sz[:-2]) * ({'mm': 1e-3, 'um': 1e-6}[sz[-2:]])
+        label = "{:.1f} mm".format(dp * 1e3)
+        color = cmap((sizes.index(sz)+2)/(len(sizes)+2))
+        w, wz, we = velocity_dct[sz]
+
+        if sz == '90um':
+            w[wz < -.085] = np.nan
+
+        z, mr_l, _, mr_r, _ = abr_dct[sz]
+        mr = (mr_l + mr_r) / 2 * 1e-6
+        # mr = running_average(mr, n=5)
+        z = (z[0] - z) * 1e-6
+
+        if sz == '90um':
+            mr[z < -0.085] = np.nan
+
+        gamma = 1e-6 / (0.332**2 * 7**(2/3)) * ((0.4 * 910 * 334e3)/(2.2 * 20))**2
+        w_mr = gamma * mr**2 * z
+        ws = np.array([-settling_velocity_at_z(dp, 293.15, 0, 2500, z_val) for z_val in z])
+
+        fc = [c for c in color[:3]] + [0.4]
+        ax[i].fill_betweenx(wz, w-we, w+we, color=fc)
+        ax[i].plot(w, wz, color=color, label=label, lw=2)
+        ax[i].plot(-w_mr, z, '--k')
+        ax[i].plot(ws, z, ':k')
+        ax[i].plot(ws-w_mr, z, '-k', lw=2)
+        ax[i].set_title(label)
+
+    for i, a in enumerate(ax):
+        a.set_ylim([-0.1, 0])
+        a.tick_params(labelsize=12, right=i < len(ax)-1, labelleft=(i==0))
+        a.set_xlim([0, None])
+        a.set_xlabel('$w$ (m/s)', fontsize=16)
+        # a.set_facecolor('0.9')
+    ax[0].set_ylabel('$z$ (m)', fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
 
 
 def plot_width_and_height_over_time(sz):
@@ -96,8 +149,40 @@ def plot_width_and_height_over_time(sz):
     plt.show()
 
 
+def plot_ablation_rates():
+    sizes = ['55um', '90um', '200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+    with open('plumeVideoHeightsWidths.pkl', 'rb') as f:
+        dct = pickle.load(f)
+
+    data = pd.read_csv('data/ablation_experiments.csv')
+    data = data[(data['material'] == 'glass') & (data['salinity'] == 0)]
+    data_means = data.groupby('dp').mean(numeric_only=True)
+    exp_dp = data_means.index.values * 1e-6  # particle diameter in m
+    exp_drdt = data_means['drdt'].values  # melt rate in m/s
+
+    dp = np.array([float(sz[:-2]) * {'mm': 1e-3, 'um': 1e-6}[sz[-2:]] for sz in sizes])
+    dRdt = np.zeros(len(sizes))
+    for i, sz in enumerate(sizes):
+        w = dct[sz][1] * ccal[sz] * 1e-3
+        t = np.arange(len(w)) / 120  # s
+        I = ~np.isnan(w)
+        p = np.polyfit(t[I], w[I], 1)
+        dRdt[i] = p[0] / 2
+
+    plt.figure()
+    plt.semilogx(exp_dp, -exp_drdt * 1e3, 'o')
+    plt.semilogx(dp, -dRdt, 's')
+    plt.ylabel('$-\dot{R}$ (mm/s)', fontsize=16)
+    plt.tick_params(labelsize=12)
+    plt.xlabel('$d_p$ (m)', fontsize=16)
+    plt.tight_layout()
+    plt.ylim([0, None])
+
+    plt.show()
+
+
 def compute_width_and_height(sz, debug=False):
-    with open('plumeVideoContours.pkl', 'rb') as f:
+    with open('plumeVideoContours_with_holder.pkl', 'rb') as f:
         dct = pickle.load(f)
 
     contours = dct[sz]
@@ -138,8 +223,9 @@ def compute_width_and_height(sz, debug=False):
 
         if use_low_threshold:
             cl = contours_low[n]
-            J = cl[:, 0] >= y_ice
-            y98 = np.sort(cl[J, 0])[::-1][sum(J) // 50]
+            Jl = cl[:, 0] >= y_ice
+            y98l = np.sort(cl[Jl, 0])[::-1][sum(Jl) // 50]
+            y98 = min(y98, y98l)
 
         widths[n] = x90 - x10
         heights[n] = y98 - y2
@@ -149,17 +235,20 @@ def compute_width_and_height(sz, debug=False):
         if debug:
             plt.plot(c[I, 1], c[I, 0], '-k', label='holder')
             plt.plot(c[J, 1], c[J, 0], '-', label='ice')
-            plt.plot([x10, x10], [y2, y98], color='C1')
-            plt.plot([x90, x90], [y2, y98], color='C1')
-            plt.plot([x10, x90], [y2, y2], color='C1')
-            plt.plot([x10, x90], [y98, y98], color='C1')
+            if use_low_threshold:
+                plt.plot(cl[Jl, 1], cl[Jl, 0], '-', label='ice (low thresh)')
+
+            plt.plot([x10, x10], [y2, y98], color='C2')
+            plt.plot([x90, x90], [y2, y98], color='C2')
+            plt.plot([x10, x90], [y2, y2], color='C2')
+            plt.plot([x10, x90], [y98, y98], color='C2')
 
             plt.gca().invert_yaxis()
             plt.gca().set_aspect('equal')
             plt.title("dp = {:s}  |  n = {:d}".format(sz, n))
 
             plt.show()
-        print("\r[{:s}]: {:.1f}%".format(sz, (n+1)/len(contours) * 100), end='')
+        print("\r[compute_width_and_height({:s})] {:.1f}%".format(sz, (n+1)/len(contours) * 100), end='')
 
     with open('plumeVideoHeightsWidths.pkl', 'rb') as f:
         hw_dct = pickle.load(f)
@@ -169,10 +258,85 @@ def compute_width_and_height(sz, debug=False):
     with open('plumeVideoHeightsWidths.pkl', 'wb') as f:
         pickle.dump(hw_dct, f)
 
+    print(" \033[42mdone\033[0m")
+
+
+def ablation_rate_profiles(sz, skip_n_frames=10):
+    with open('plumeVideoHeightsWidths.pkl', 'rb') as f:
+        heights, widths, y_top, y_bot = pickle.load(f)[sz]
+
+    with open('plumeVideoContours.pkl', 'rb') as f:
+        contours = pickle.load(f)[sz]
+
+    # ind = np.argwhere(widths * ccal[sz] * 1e-6 < 0.05)
+    ind = np.argwhere(heights/heights[0] < 0.9)
+    N = len(contours) if len(ind) == 0 else ind[0][0]
+
+    contours = [c * ccal[sz] for c in contours[:N]]
+    t = np.arange(len(contours)) / 120
+
+    contours = contours[::skip_n_frames]
+    t = t[::skip_n_frames]
+
+    # plt.plot(contours[0][:, 0], contours[0][:, 1])
+    # plt.gca().set_aspect('equal')
+    # plt.show()
+
+    mrp = compute_melt_rate_profile(contours, t, bin_size=2000)
+    z, mr_l, mr_l_se, mr_r, mr_r_se = mrp
+
+    with open('plumeVideoAblationRateProfiles.pkl', 'rb') as f:
+        dct = pickle.load(f)
+
+    dct[sz] = z, mr_l, mr_l_se, mr_r, mr_r_se
+
+    with open('plumeVideoAblationRateProfiles.pkl', 'wb') as f:
+        pickle.dump(dct, f)
+
+    # plt.plot(mr_l, z)
+    # plt.plot(mr_r, z)
+    # plt.show()
+
+
+def compute_melt_rate_profile(contours, times, bin_size=1000, tmax=None, ignore_nan=True, debug=False):
+    """ Contours and Bin size in um, times in seconds"""
+
+    max_ind = len(contours) if tmax is None else np.argmin(np.abs(times - tmax))
+    times = times[:max_ind]
+
+    bin_edges = np.arange(np.min(contours[0][:, 1]), np.max(contours[0][:, 1]), bin_size)
+    bin_centers = (bin_edges[1:] + bin_edges[:-1])/2
+    xmean = np.mean(contours[0][:, 0])
+    x_bins_l = np.zeros((len(bin_centers), max_ind))
+    x_bins_r = np.zeros((len(bin_centers), max_ind))
+    for i in range(max_ind):
+        left = contours[i][contours[i][:, 0] < xmean]
+        right = contours[i][contours[i][:, 0] >= xmean]
+        dig_l = np.digitize(left[:, 1], bin_edges)
+        dig_r = np.digitize(right[:, 1], bin_edges)
+        for j in range(len(bin_centers)):
+            if ignore_nan:
+                x_bins_l[j, i] = abs(np.nanmean(left[dig_l == j+1, 0]) - xmean)
+                x_bins_r[j, i] = abs(np.nanmean(right[dig_r == j + 1, 0]) - xmean)
+            else:
+                x_bins_l[j, i] = abs(np.mean(left[dig_l == j + 1, 0]) - xmean)
+                x_bins_r[j, i] = abs(np.mean(right[dig_r == j + 1, 0]) - xmean)
+        print("\r[\033[32mcompute_melt_rate_profile\033[0m] {:.1f}%".format((i+1)/max_ind*100), end='')
+
+    fits_l = [linregress(times, x_bins_l[i, :]) for i in range(x_bins_l.shape[0])]
+    fits_r = [linregress(times, x_bins_r[i, :]) for i in range(x_bins_r.shape[0])]
+
+    # dr/dt in um/s
+    mr_l = np.array([val.slope for val in fits_l])
+    mr_r = np.array([val.slope for val in fits_r])
+    mr_l_se = np.array([val.stderr for val in fits_l])
+    mr_r_se = np.array([val.stderr for val in fits_r])
+    return bin_centers, mr_l, mr_l_se, mr_r, mr_r_se
+
 
 def particle_velocity():
     ptv_sizes = ['875um', '1mm', '2mm', '3mm', '4mm', '8mm']
-    piv_sizes = ['90um', '200um', '375um']
+    piv_sizes = ['55um', '90um', '200um', '375um']
     diameters = np.logspace(-5, -1, 30)
     wt = [settling_velocity(d, 293.15, 0, 2500) for d in diameters]
     # wa = [np.abs(settling_velocity_above_z(d, 293.15, 0, 2500, -0.1)) for d in diameters]
@@ -184,15 +348,22 @@ def particle_velocity():
         ws_std[i] = np.nanstd(w)
 
     ws_exp = {}
-    for sz in ptv_sizes:
-        ws_exp[sz] = ptv_velocity(sz)
-    for sz in piv_sizes:
-        ws_exp[sz] = piv_velocity(sz)
+    # for sz in ptv_sizes:
+    #     ws_exp[sz] = ptv_velocity(sz)
+    # for sz in piv_sizes:
+    #     ws_exp[sz] = piv_velocity(sz)
+    with open('velocity_profiles.pkl', 'rb') as f:
+        dct = pickle.load(f)
+
+    for sz in ptv_sizes + piv_sizes:
+        w, wz, we = dct[sz]
+        I = wz >= -0.1
+        ws_exp[sz] = (np.nanmean(w[I]), np.nanmean(we[I]))
 
     plt.figure()
     plt.plot(diameters, wt, '-k', lw=2, label=r'$w_s(z\rightarrow\infty)$')
     # plt.plot(diameters, wa, '--k', lw=2, label=r'$\langle w_s\rangle_z$')
-    plt.fill_between(diameters, ws_avg - ws_std, ws_avg + ws_std, color=(0, 0, 0, 0.2))
+    plt.fill_between(diameters, ws_avg - ws_std, ws_avg + ws_std, color=(0, 0, 0, 0.15))
     plt.plot(diameters, ws_avg, '--k', lw=2, label=r'$\langle w_s\rangle_z$')
     for sz in ptv_sizes:
         mu, sigma = ws_exp[sz]
@@ -217,7 +388,7 @@ def particle_velocity():
     plt.figure()
     plt.plot(diameters, wt, '-k', lw=2, label=r'$w_s(z\rightarrow\infty)$')
     # plt.plot(diameters, wa, '--k', lw=2, label=r'$\langle w_s\rangle_z$')
-    plt.fill_between(diameters, ws_avg - ws_std, ws_avg + ws_std, color=(0, 0, 0, 0.2))
+    plt.fill_between(diameters, ws_avg - ws_std, ws_avg + ws_std, color=(0, 0, 0, 0.15))
     plt.plot(diameters, ws_avg, '--k', lw=2, label=r'$\langle w_s\rangle_z$')
     for sz in ptv_sizes:
         mu, sigma = ws_exp[sz]
@@ -303,7 +474,115 @@ def particle_track_curvature():
     plt.show()
 
 
-def particle_velocity_profiles():
+def velocity_profiles():
+    piv_sizes = ['55um', '90um', '200um', '375um']
+    ptv_sizes = ['875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+    # ptv_sizes = ['4mm']
+    sizes = piv_sizes + ptv_sizes
+    bins = np.arange(-1000, 2000, 64)
+    tf = 120  # time period to use in seconds (max. 180s)
+    dt = 1/120  # 1 / fps
+    nf = int(tf/dt)  # number of frames to use
+    min_n_ptv = 10  # minimum number of data points in bins
+    min_n_piv = 1  # minimum number of data points in bins
+    cmap = cmo.dense
+    colors = {k: cmap((sizes.index(k)+1)/(len(sizes) + 1)) for k in sizes}
+
+    with open('plumeVideoHeightsWidths.pkl', 'rb') as f:
+        hw_dct = pickle.load(f)
+
+    vy = {sz: [[] for _ in range(len(bins)-1)] for sz in sizes}
+
+    # Compute tracking profiles
+    for sz in ptv_sizes:
+        _, _, yt, _ = hw_dct[sz]
+        yt = running_average(yt, n=240)  # y-coordinate of top of ice block
+        for trk in get_tracks_xyn(sz):
+            for j in range(len(trk)-1):
+                n = int((trk[j, 2] + trk[j+1, 2]) / 2)
+                if n < nf:
+                    y = (trk[j, 1] + trk[j+1, 1])/2 - yt[n]  # distance to top of the block
+                    ind = np.argmin(np.abs(y-bins[y >= bins]))
+                    vy[sz][ind].append((trk[j+1, 1] - trk[j, 1]) * ccal[sz] * 1e-6 / dt)
+                    # inst_vel = np.sqrt((trk[j+1, 0] - trk[j, 0])**2 + (trk[j+1, 1] - trk[j, 1])**2) * ccal[sz] * 1e-6 / dt
+                    # vy[sz][ind].append(inst_vel)
+
+    # Compute correlation profiles
+    for sz in piv_sizes:
+        cutoff_vy = -10 if sz == '90um' else 0 if sz == '55um' else 1
+        _, _, yt, _ = hw_dct[sz]
+        yt = running_average(yt, n=240)  # y-coordinate of top of ice block
+
+        with open('particle_correlations/piv_sides_{:s}_32_64.pkl'.format(sz), 'rb') as f:
+            _, vectors = pickle.load(f)
+
+        for v in vectors:
+            n = int(v[4])
+            y = v[1] - yt[n] + top[sz]
+            ind = np.argmin(np.abs(y - bins[y >= bins]))
+            if v[3] > cutoff_vy:
+                vy[sz][ind].append(v[3] * ccal[sz] * 1e-6 / dt)
+
+    # Show profiles
+    plt.figure(figsize=(6, 10))
+    dct = {}
+    for sz in piv_sizes:
+        cnt = np.array([len(arr) for arr in vy[sz]])
+        vy_mean = np.array([np.mean(arr) for arr in vy[sz] if len(arr) > min_n_piv])
+        vy_std = np.array([np.std(arr) for arr in vy[sz] if len(arr) >= min_n_piv])
+        y = (bins[1:] + bins[:-1])/2
+        y = y[(cnt > min_n_piv)]
+        y = -y * ccal[sz] * 1e-6
+
+        fc = [c for c in colors[sz][:3]] + [0.2]
+        plt.fill_betweenx(y, vy_mean-vy_std, vy_mean+vy_std, color=fc)
+        plt.plot(vy_mean, y, color=colors[sz], lw=2)
+        dct[sz] = (vy_mean, y, vy_std)
+    for sz in ptv_sizes:
+        cnt = np.array([len(arr) for arr in vy[sz]])
+        vy_mean = np.array([np.mean(arr) for arr in vy[sz] if len(arr) >= max(min_n_ptv, 0.01*np.max(cnt))])
+        vy_std = np.array([np.std(arr) for arr in vy[sz] if len(arr) >= max(min_n_ptv, 0.01*np.max(cnt))])
+        y = (bins[1:] + bins[:-1])/2
+        y = y[(cnt >= min_n_ptv) & (cnt > 0.01 * np.max(cnt))]
+        y = -y * ccal[sz] * 1e-6
+
+        vy_mean = vy_mean[y < 0]
+        vy_std = vy_std[y < 0]
+        y = y[y < 0]
+
+        fc = [c for c in colors[sz][:3]] + [0.2]
+        plt.fill_betweenx(y, vy_mean-vy_std, vy_mean+vy_std, color=fc)
+        plt.plot(vy_mean, y, color=colors[sz], lw=2)
+        dct[sz] = (vy_mean, y, vy_std)
+    plt.xlim([0, None])
+    plt.ylim([-0.13, 0])
+    plt.tick_params(labelsize=12)
+    plt.xlabel("$w$ (m/s)", fontsize=16)
+    plt.ylabel('$z$ (m)', fontsize=16)
+
+    handles = []
+    for sz in sizes:
+        fc = [c for c in colors[sz][:3]] + [0.2]
+        fl = plt.fill_betweenx([], [], [], color=fc)
+        ln, = plt.plot([], [], color=colors[sz], lw=2)
+        handles.append((fl, ln))
+    plt.legend(handles, sizes, bbox_to_anchor=(1.03, 1.), loc='upper left', fontsize=14)
+    plt.tight_layout()
+
+    plt.figure()
+    for sz in sizes:
+        cnt = np.array([len(arr) for arr in vy[sz]])
+        y = (bins[1:] + bins[:-1])/2
+        y = -y * ccal[sz] * 1e-6
+        plt.plot(cnt/np.nanmax(cnt), y, '-o', color=colors[sz])
+
+    with open('velocity_profiles.pkl', 'wb') as f:
+        pickle.dump(dct, f)
+
+    plt.show()
+
+
+def particle_volume_fraction_profiles():
     piv_sizes = ['90um', '200um', '375um']
     ptv_sizes = ['875um', '1mm', '2mm', '3mm', '4mm', '8mm']
     # ptv_sizes = ['4mm']
@@ -404,8 +683,9 @@ def particle_velocity_profiles():
     plt.show()
 
 
+
 def show_piv_test(sz):
-    cutoff_vy = 0.8
+    cutoff_vy = -10 if sz == '90um' else 0 if sz == '55um' else 1
 
     with open('particle_correlations/piv_sides_{:s}_32_64.pkl'.format(sz), 'rb') as f:
         vel, vel_avg = pickle.load(f)
@@ -450,10 +730,10 @@ def show_piv_test(sz):
     plt.ylabel('z (m)', fontsize=16)
 
     plt.figure()
-    plt.plot(y_arr, np.array(n_arr) / len(vel) * len(y_arr), '-o')
+    plt.plot(y_m, np.array(n_arr), '-o')
     plt.xlabel('distance from top')
     plt.ylabel('fraction above cutoff')
-    plt.ylim([0, 1])
+    # plt.ylim([0, 1])
 
     plt.figure()
     plt.boxplot([vy[yi] for yi in t], vert=True, positions=y_arr, widths=30, manage_ticks=False)
@@ -473,13 +753,13 @@ def animate_contours(sz):
         if sz in top:
             c = c[c[:, 0] > top[sz]]
         ax.clear()
-        ax.plot(c[:, 1], -c[:, 0], '-k')
+        ax.plot(c[:, 0], -c[:, 1], '-k')
 
         if sz + '_low' in dct:
             cl = dct[sz + '_low'][n]
             if sz in top:
                 cl = cl[cl[:, 0] > top[sz]]
-            ax.plot(cl[:, 1], -cl[:, 0], '-b')
+            ax.plot(cl[:, 0], -cl[:, 1], '-b')
 
         ax.set_aspect('equal')
         ax.set_xlim([0, 1100])
@@ -494,8 +774,8 @@ def extract_contours(sz, n=None, debug=False):
     path = folder + sz + '/' + sz + '.MOV'
     cap = cv.VideoCapture(path)
     bin_thresh = {'8mm': 180, '4mm': 180, '3mm': 180, '2mm': 180, '1mm': 180, '875um': 180, '375um': 100, '200um': 100,
-                  '90um': 100}[sz]
-    low_thresh = {'200um': 50, '90um': 15}
+                  '90um': 100, '55um': 100}[sz]
+    low_thresh = {'200um': 50, '90um': 15, '55um': 15}
 
     if not cap.isOpened():
         print("Cannot open file")
@@ -513,6 +793,8 @@ def extract_contours(sz, n=None, debug=False):
     for n in range(n0, N):
         ret, frame = cap.read()
         gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
+        # gray[:, bottom[sz]:] = 255
+        gray[:, :top[sz]] = 0
         mask = find_ice_mask(gray, mask_thresh=bin_thresh)
         edges = find_edges(mask, largest_only=True)
         contours.append(edges)
@@ -536,19 +818,62 @@ def extract_contours(sz, n=None, debug=False):
                 plt.plot(edges[:, 0], edges[:, 1], '-r')
                 plt.title('dp = {:s}  |  n = {:d}  low threshold'.format(sz, n))
                 plt.show()
-        print("\r[extract_contours] {:s}: {:.1f}%".format(sz, (n+1)/N*100), end='')
+        print("\r[extract_contours({:s})] {:.1f}%".format(sz, (n+1)/N*100), end='')
 
     if not debug:
-        with open('plumeVideoContours.pkl', 'rb') as f:
+        with open('plumeVideoContours_with_holder.pkl', 'rb') as f:
             dct = pickle.load(f)
 
         dct[sz] = contours
         if len(contours_low_thresh) > 0:
             dct[sz + '_low'] = contours_low_thresh
 
-        with open('plumeVideoContours.pkl', 'wb') as f:
+        with open('plumeVideoContours_with_holder.pkl', 'wb') as f:
             pickle.dump(dct, f)
         print(" \033[42mdone\033[0m")
+
+
+def remove_holder_from_contours(sz, debug=False):
+    with open('plumeVideoContours_with_holder.pkl', 'rb') as f:
+        contours = pickle.load(f)[sz]
+
+    new_contours = []
+    cnt = 0
+    for c in contours:
+        if debug:
+            plt.plot(c[:, 1], c[:, 0], label='before')
+        c = c[c[:, 0] > top[sz], :]
+        c = c[c[:, 0] < bottom[sz], :]
+        I = c[:, 0] < top[sz] + 20
+        holder_width = np.mean(np.abs(c[I, 1] - np.mean(c[I, 1])))
+        y_ice = top[sz] + 10
+        while y_ice < bottom[sz]:
+            I = (c[:, 0] > (y_ice - 10)) & (c[:, 0] <= (y_ice + 10))
+            width = np.mean(np.abs(c[I, 1] - np.mean(c[I, 1])))
+            if width > 1.1 * holder_width:
+                break
+            y_ice += 1
+
+        c = c[c[:, 0] >= y_ice, :]
+        if debug:
+            plt.plot(c[:, 1], c[:, 0], label='after')
+            plt.gca().set_aspect('equal')
+            plt.legend()
+            plt.show()
+        c = np.fliplr(c)  # make first coordinate the x-direction
+        new_contours.append(c)
+        cnt += 1
+        print("\r[remove_holder_from_contours({:s})] {:.1f}%".format(sz, cnt/len(contours)*100), end='')
+
+    with open('plumeVideoContours.pkl', 'rb') as f:
+        dct = pickle.load(f)
+
+    dct[sz] = new_contours
+
+    with open('plumeVideoContours.pkl', 'wb') as f:
+        pickle.dump(dct, f)
+
+    print(" \033[42mdone\033[0m")
 
 
 def find_ice_mask(img, mask_thresh=40, seed_point=None):
@@ -597,13 +922,14 @@ def find_edges(img, largest_only=False, remove_outside=False):
         return edges[1:, :]
 
 
-def compare_breadth():
-    sizes = ['200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+def breadth_profiles():
+    sizes = ['55um', '90um', '200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
     cmap = cmo.dense
     # colors = {'90um': cmap(0.4), '200um': cmap(0.6), '375um': cmap(0.8)}
     # fig, ax = plt.subplots(1, 3, figsize=(8, 10), sharey=True, sharex=True)
     fig, ax = plt.subplots(figsize=(5, 8))
     fits = {}
+    dct = {}
     for sz in sizes:
         bins = np.linspace(top_ice[sz], 2000, 100, dtype=np.int32)
         y = (bins[1:] + bins[:-1]) / 2
@@ -617,6 +943,14 @@ def compare_breadth():
         std_r = np.nanstd(breadth[1], axis=0) * ccal[sz] * 1e-3
 
         z = (top_ice[sz] - y) * ccal[sz] * 1e-6
+
+        if sz == '90um':
+            avg_l[z < -0.085] = np.nan
+            avg_r[z < -0.085] = np.nan
+        if sz == '55um':
+            avg_l[:] = np.nan
+            avg_r[z < -0.09] = np.nan
+
         # fc = [c for c in colors[sz][:3]] + [0.2]
         # ax[0].fill_betweenx(z, avg_l-std_l, avg_l+std_l, color=fc)
         # ax[1].fill_betweenx(z, avg_r - std_r, avg_r + std_r, color=fc)
@@ -624,12 +958,13 @@ def compare_breadth():
         color = cmap((sizes.index(sz)+1)/(len(sizes)+1))
         # ax[0].plot(avg_l, z, label=sz, color=color)
         # ax[1].plot(avg_r, z, label=sz, color=color)
-        ax.plot(np.nanmean(np.vstack((avg_l, avg_r)), axis=0), z, color=color, label=sz.replace('u', '$\mu$'))
         b = np.nanmean(np.vstack((avg_l, avg_r)), axis=0)
+        ax.plot(b, z, color=color, label=sz.replace('u', '$\mu$'))
         I = ~np.isnan(b) & (z >= -0.1)
         p = np.polyfit(z[I], b[I], deg=1)
         ax.plot(p[0]*z + p[1], z, '-k', label=None)
         fits[sz] = p
+        dct[sz] = (b * 1e-3, z)
 
         print("[{:s} left]: abs std = {:.1f} mm  |  rel std = {:.1f}%".format(sz, np.nanmean(std_l), np.nanmean(std_l/avg_l)*100))
         print("[{:s} right]: abs std = {:.1f} mm  |  rel std = {:.1f}%".format(sz, np.nanmean(std_r), np.nanmean(std_r/avg_r)*100))
@@ -659,7 +994,7 @@ def compare_breadth():
     plt.tight_layout()
 
     fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-    dp = [float(sz[:-2]) * ({'mm': 1e-3, 'um': 1e-6}[sz[-2:]]) for sz in sizes]  # particle diameter in pixels
+    dp = [float(sz[:-2]) * ({'mm': 1e-3, 'um': 1e-6}[sz[-2:]]) for sz in sizes]
     slope = [fits[sz][0] for sz in sizes]
     intercept = [fits[sz][1] for sz in sizes]
     ax[0].semilogx(dp, np.array(slope)*1e-3, '-o')
@@ -671,6 +1006,140 @@ def compare_breadth():
     ax[0].tick_params(labelsize=12)
     ax[1].tick_params(top=True, labelsize=12, which='both')
 
+    with open('breadth_slopes.pkl', 'wb') as f:
+        pickle.dump([dp, np.array(slope) * 1e-3], f)
+
+    with open('breadth_profiles.pkl', 'wb') as f:
+        pickle.dump(dct, f)
+
+    plt.show()
+
+
+def phi_profiles():
+    sizes = ['200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+    cmap = cmo.dense
+    fig, ax = plt.subplots(figsize=(5, 8))
+    with open('breadth_profiles.pkl', 'rb') as f:
+        breadth_dct = pickle.load(f)
+
+    with open('velocity_profiles.pkl', 'rb') as f:
+        velocity_dct = pickle.load(f)
+
+    data = pd.read_csv('data/ablation_experiments.csv')
+    data = data[(data['material'] == 'glass') & (data['salinity'] == 0)]
+    data_means = data.groupby('dp').mean(numeric_only=True)
+    exp_dp = data_means.index.values * 1e-6  # particle diameter in m
+    exp_drdt = data_means['drdt'].values  # melt rate in m/s
+    exp_drdt = exp_drdt[[3, 5, 6, 7, 8, 9, 10, 11]]
+    exp_drdt = {sz: arr for sz, arr in zip(sizes, exp_drdt)}
+
+    ax.plot([0, 0], [-0.1, 0], '-', color='0.4')
+    for sz in sizes:
+        color = cmap((sizes.index(sz)+1)/(len(sizes)+1))
+        b, bz = breadth_dct[sz]
+        w, wz = velocity_dct[sz]
+        wi = -np.interp(-bz, -wz, w, left=np.nan, right=np.nan)
+        phi = -exp_drdt[sz] * 0.6 * bz / (b * wi)
+
+        ax.plot(phi, bz, color=color, label=sz.replace('u', '$\mu$'))
+    ax.set_ylim([-0.1, 0])
+    ax.set_xlabel('$\phi$', fontsize=16)
+    ax.set_ylabel('$z$ (m)', fontsize=16)
+    ax.tick_params(labelsize=12)
+    ax.legend(fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+
+def vel_profile_settling_comparison():
+    sizes = ['90um', '200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+    cmap = cmo.dense
+    fig, ax = plt.subplots(1, len(sizes), figsize=(16, 8))
+    with open('velocity_profiles.pkl', 'rb') as f:
+        velocity_dct = pickle.load(f)
+
+    z = -np.logspace(-6, -1, 100)
+    for i, sz in enumerate(sizes):
+        dp = float(sz[:-2]) * ({'mm': 1e-3, 'um': 1e-6}[sz[-2:]])
+        label = "{:.1f} mm".format(dp * 1e3)
+        color = cmap((sizes.index(sz)+2)/(len(sizes)+2))
+        w, wz, we = velocity_dct[sz]
+
+        if sz == '90um':
+            w[wz < -.085] = np.nan
+
+        ws = np.array([-settling_velocity_at_z(dp, 293.15, 0, 2500, z_val) for z_val in z])
+        ws_i = np.interp(wz, z, ws)
+
+        fc = [c for c in color[:3]] + [0.4]
+        ax[i].fill_betweenx(wz, w-we, w+we, color=fc)
+        ax[i].plot(w, wz, color=color, label=label, lw=2)
+        ax[i].plot(ws, z-dp/2, '-k', lw=2)
+        # ax[i].plot(ws_i/w, wz, '-k', lw=2)
+        ax[i].set_title(label)
+
+    for i, a in enumerate(ax):
+        a.set_ylim([-0.1, 0])
+        a.tick_params(labelsize=12, right=i < len(ax)-1, labelleft=(i==0))
+        a.set_xlim([0, None])
+        a.set_xlabel('$w$ (m/s)', fontsize=16)
+        # a.set_facecolor('0.9')
+    ax[0].set_ylabel('$z$ (m)', fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+
+
+def all_exp_profiles():
+    sizes = ['55um', '90um', '200um', '375um', '875um', '1mm', '2mm', '3mm', '4mm', '8mm']
+    cmap = cmo.dense
+    fig, ax = plt.subplots(1, 3, figsize=(12, 8))
+    with open('breadth_profiles.pkl', 'rb') as f:
+        breadth_dct = pickle.load(f)
+
+    with open('velocity_profiles.pkl', 'rb') as f:
+        velocity_dct = pickle.load(f)
+
+    data = pd.read_csv('data/ablation_experiments.csv')
+    data = data[(data['material'] == 'glass') & (data['salinity'] == 0)]
+    data_means = data.groupby('dp').mean(numeric_only=True)
+    exp_drdt = data_means['drdt'].values  # melt rate in m/s
+    exp_drdt = exp_drdt[[1, 3, 5, 6, 7, 8, 9, 10, 11]]
+    exp_drdt = {sz: arr for sz, arr in zip(sizes, exp_drdt)}
+
+    ax[2].plot([0, 0], [-0.1, 0], '-', color='0.4')
+    for sz in sizes:
+        dp = float(sz[:-2]) * ({'mm': 1e-3, 'um': 1e-6}[sz[-2:]])
+        label = "{:.1f} mm".format(dp * 1e3)
+        color = cmap((sizes.index(sz)+1)/(len(sizes)+1))
+        b, bz = breadth_dct[sz]
+        b = running_average(b, n=5)
+        w, wz, we = velocity_dct[sz]
+
+        if sz == '90um':
+            b[bz < -.085] = np.nan
+            w[wz < -.085] = np.nan
+
+        wi = -np.interp(-bz, -wz, w, left=np.nan, right=np.nan)
+        phi = -exp_drdt[sz] * 0.6 * bz / (b * wi)
+
+        ax[0].plot(b*1e3, bz, color=color, label=label, lw=2)
+        fc = [c for c in color[:3]] + [0.2]
+        ax[1].fill_betweenx(wz, w-we, w+we, color=fc)
+        ax[1].plot(w, wz, color=color, label=label, lw=2)
+        ax[2].plot(phi, bz, color=color, label=label, lw=2)
+
+    for i, a in enumerate(ax):
+        a.set_ylim([-0.1, 0])
+        a.tick_params(labelsize=12, right=i < len(ax)-1, labelleft=(i==0))
+        a.set_xlim([0, None])
+    ax[0].set_ylabel('$z$ (m)', fontsize=16)
+    ax[0].set_xlabel('$b$ (mm)', fontsize=16)
+    ax[1].set_xlabel('$w$ (m/s)', fontsize=16)
+    ax[2].set_xlabel('$\phi$', fontsize=16)
+    ax[0].legend(fontsize=14)
+    ax[0].set_xlim([0, 26])
+    plt.tight_layout()
     plt.show()
 
 
@@ -678,7 +1147,7 @@ def show_breadth(sz):
     bins = np.linspace(top_ice[sz], 2000, 100, dtype=np.int32)
     y = (bins[1:] + bins[:-1]) / 2
 
-    with open('breadths_'+sz+'.pkl', 'rb') as f:
+    with open('breadth_profiles/breadths_'+sz+'.pkl', 'rb') as f:
         breadth = pickle.load(f)
 
     cmap = plt.get_cmap('Greens')
@@ -687,6 +1156,10 @@ def show_breadth(sz):
         color = cmap(i/len(breadth[0]))
         ax[0].plot(np.array(breadth[0][i]) * ccal[sz] * 1e-3, (top_ice[sz]-y) * ccal[sz] * 1e-6, color=color)
         ax[1].plot(np.array(breadth[1][i]) * ccal[sz] * 1e-3, (top_ice[sz]-y) * ccal[sz] * 1e-6, color=color)
+
+    ax[0].plot(np.nanmean(breadth[0], axis=0) * ccal[sz] * 1e-3, (top_ice[sz]-y) * ccal[sz] * 1e-6, '-k')
+    ax[1].plot(np.nanmean(breadth[1], axis=0) * ccal[sz] * 1e-3, (top_ice[sz] - y) * ccal[sz] * 1e-6, '-k')
+
     ax[0].set_xlabel('$b$ (mm)', fontsize=16)
     ax[1].set_xlabel('$b$ (mm)', fontsize=16)
     ax[0].set_ylabel('$z$ (m)', fontsize=16)
@@ -703,7 +1176,7 @@ def show_breadth(sz):
 def compute_breadth_heatmap(sz, debug=False):
     path = folder + sz + '/' + sz + '.MOV'
     cap = cv.VideoCapture(path)
-    bin_thresh = 230 if sz == '90um' else 220
+    bin_thresh = 230 if sz == '90um_old' else 220
     hm_thresh = 5  # heatmap threshold
     hm_peak_thresh = 0.5  # heatmap peak threshold
     n_avg = int(0.5 * 120)  # number of frames to use for running average (0.5 s * 120 fps)
@@ -717,6 +1190,12 @@ def compute_breadth_heatmap(sz, debug=False):
     cap.set(cv.CAP_PROP_POS_FRAMES, 0)
 
     N = int(cap.get(cv.CAP_PROP_FRAME_COUNT)) // 3
+    print(N)
+    if sz == '90um':
+        N = 120 * 60
+
+    with open('plumeVideoHeightsWidths.pkl', 'rb') as f:
+        _, _, _, ybot = pickle.load(f)[sz]
 
     breadth = [[], []]
     memry = []
@@ -724,6 +1203,8 @@ def compute_breadth_heatmap(sz, debug=False):
     for n in range(N):
         ret, frame = cap.read()
         gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
+        gray[:, :top[sz]] = 0
+        gray[:, bottom[sz]:] = 255
 
         # 1) Obtain mask for ice-sediment block
         ice_mask = find_ice_mask(gray)
@@ -735,7 +1216,8 @@ def compute_breadth_heatmap(sz, debug=False):
         binry[ice_mask == 1] = 255
 
         bg_mask = np.zeros((binry.shape[0] + 2, binry.shape[1] + 2), dtype=np.uint8)
-        seed_point = [[i, binry.shape[1]//2] for i in range(10, binry.shape[0]) if binry[i, binry.shape[1]//2] == 255][0]
+        # seed_point = [[i, binry.shape[1]//2] for i in range(10, binry.shape[0]) if binry[i, binry.shape[1]//2] == 255][0]
+        seed_point = [binry.shape[0]//2, binry.shape[1]//2]
         cv.floodFill(binry, bg_mask, seed_point, (255,))
         p_mask = (255 - binry)/255
 
@@ -747,12 +1229,18 @@ def compute_breadth_heatmap(sz, debug=False):
             heatmap[ice_mask == 1] = np.nan
 
             if debug:
+                edges = find_edges(ice_mask, largest_only=True)
                 plt.figure()
                 plt.imshow(gray.T)
+                plt.plot(seed_point[0], seed_point[1], 'ok', mfc='w')
+                plt.plot(edges[:, 1], edges[:, 0], '-r')
+
+                plt.figure()
+                plt.imshow(p_mask.T)
+
                 plt.figure()
                 plt.imshow(heatmap.T, cmap=cmo.haline)
                 plt.colorbar()
-                plt.show()
 
             b0, b1 = [], []
             for i in range(len(bins)-1):
@@ -785,6 +1273,15 @@ def compute_breadth_heatmap(sz, debug=False):
                 else:
                     b1.append(np.nan)
 
+            if debug:
+                plt.figure()
+                y = (bins[1:] + bins[:-1])/2
+                I = y < ybot[n]
+                plt.plot(np.array(b0)[I], y[I], label='left')
+                plt.plot(np.array(b1)[I], y[I], label='right')
+                plt.legend()
+                plt.show()
+
             breadth[0].append(b0)
             breadth[1].append(b1)
             memry = []
@@ -794,7 +1291,7 @@ def compute_breadth_heatmap(sz, debug=False):
         print("\r[compute_breadth_heatmap] {:s}: {:.1f}% ({:02d}:{:02d}:{:02d} remaining)".format(sz, (n+1)/N*100, h, m, s), end='')
 
     print(" \033[42mdone\033[0m")
-    with open('breadths_'+sz+'.pkl', 'wb') as f:
+    with open('breadth_profiles/breadths_'+sz+'.pkl', 'wb') as f:
         pickle.dump(breadth, f)
 
 
@@ -896,11 +1393,11 @@ def piv_sides(sz, debug=False):
     """
 
     path = folder + sz + '/' + sz + '.MOV'
-    mask_thresh = 80
+    mask_thresh = 100
     cwsz = (32, 64)  # correlation window size
     overlap = 0.5  # correlation window overlap fraction
     n_avg = 10  # int(0.5 * 120)  # number of frames to use for correlation window averaging (0.5 s * 120 fps)
-    save_path = 'particle_correlations/piv_sides_{:s}_{:d}_{:d}.pkl'.format(sz, cwsz[0], cwsz[1])
+    save_path = 'particle_correlations/piv_sides_{:s}_{:d}_{:d}_thresh100.pkl'.format(sz, cwsz[0], cwsz[1])
 
     cap = cv.VideoCapture(path)
     if not cap.isOpened():
@@ -925,7 +1422,9 @@ def piv_sides(sz, debug=False):
         gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
 
         # 1) Obtain mask for ice-sediment block
-        mask = find_ice_mask(gray)
+        gray[:, bottom[sz]-1:] = 255
+        gray[:, :top[sz]-5] = 0
+        mask = find_ice_mask(gray, mask_thresh=mask_thresh)
         mask = cv.dilate(mask, kernel=np.ones((3, 3)), iterations=2)
         mask = mask[:, top[sz]:bottom[sz]]
         gray = gray[:, top[sz]:bottom[sz]]
@@ -954,6 +1453,7 @@ def piv_sides(sz, debug=False):
             if width > 1.2 * holder_width:
                 top_y = i
                 break
+
         edges = edges[edges[:, 0] > 0, :]
         edges = edges[edges[:, 0] < np.max(edges[:, 0]), :]
         cw_x = np.nan * np.zeros((2, cw_y.size))
@@ -985,13 +1485,17 @@ def piv_sides(sz, debug=False):
                     avg_cnt[k][i] += 1
 
                     ind = np.unravel_index(np.argmax(corr), corr.shape)
-                    ym, _ = ind[1] + parabolic_peak_fit([-1, 0, 1], corr[ind[0], (ind[1] - 1):(ind[1] + 2)])
-                    xm, _ = ind[0] + parabolic_peak_fit([-1, 0, 1], corr[(ind[0] - 1):(ind[0] + 2), ind[1]])
 
-                    dy = ym - cwsz[1] + 1
-                    dx = xm - cwsz[0] + 1
+                    try:
+                        ym, _ = ind[1] + parabolic_peak_fit([-1, 0, 1], corr[ind[0], (ind[1] - 1):(ind[1] + 2)])
+                        xm, _ = ind[0] + parabolic_peak_fit([-1, 0, 1], corr[(ind[0] - 1):(ind[0] + 2), ind[1]])
 
-                    vel.append([cw_x[k, i], cw_y[i], dx, dy, n])
+                        dy = ym - cwsz[1] + 1
+                        dx = xm - cwsz[0] + 1
+
+                        vel.append([cw_x[k, i], cw_y[i], dx, dy, n])
+                    except ValueError:
+                        pass
 
                     if debug:
                         plt.figure()
@@ -1423,6 +1927,7 @@ def analyse_tracks(sz):
 
     # Compute velocities
     left_vel, right_vel = [], []
+    vectors = []
     curvature = []
     xmid = 500
     for trk in tracks:
@@ -1435,6 +1940,7 @@ def analyse_tracks(sz):
                     left_vel.append(v)
                 else:
                     right_vel.append(v)
+                vectors.append(np.hstack((trk[j+1, :2] - trk[j, :2], trk[j+1, 1])))
         if len(trk) > 2:
             for j in range(1, len(trk)-1):
                 dxdt = (trk[j + 1, 0] - trk[j - 1, 0]) / (2 * dt)
@@ -1449,6 +1955,12 @@ def analyse_tracks(sz):
     # dp = float(sz[:-6]) * {'mm': 1e-3, 'um': 1e-6}[sz[-6:-4]]
     ws = settling_velocity(dp, 293.15, 0, 2500)
     ws_avg = np.abs(average_velocity(dp))  # average settling velocity over height H = 0.1 m
+
+    # Displacement vectors
+    vectors = np.array(vectors)
+    plt.figure()
+    plt.scatter(vectors[:, 0], vectors[:, 1], 10, vectors[:, 2], cmap='Reds')
+    plt.gca().set_aspect('equal')
 
     # Left/right velocity
     bins = np.arange(0, 2*np.mean(left_vel), np.std(left_vel)/5)
