@@ -8,6 +8,9 @@ matplotlib.use('Qt5Agg')
 
 
 def main():
+    dwddp()
+    analytical_vel_profiles()
+
     d_arr = np.logspace(-6, -1, 50)
     z_arr = -np.logspace(-6, -1, 50)
 
@@ -82,6 +85,41 @@ def main():
     plt.plot(diameter, np.abs(vt), label='terminal')
     plt.xscale('log')
 
+    plt.show()
+
+
+def dwddp():
+    h = -1
+    diameters = np.logspace(-6, -1, 100)
+    delta = 0.05
+    dw = -np.array([settling_velocity_at_z(dp*(1+delta), 2500, h)
+                   - settling_velocity_at_z(dp, 2500, h) for dp in diameters])
+    plt.semilogx(diameters, dw/(delta * diameters))
+
+    I = (diameters >= 1e-3) & (diameters < 3e-3)
+    print(np.polyfit(np.log(diameters[I]), np.log(dw[I]/(delta*diameters[I])), 1))
+    plt.show()
+
+
+def analytical_vel_profiles():
+    rho_f = 1000
+    rho_p = 2500
+    R = (rho_p - rho_f) / rho_f
+    g = 9.81  # m/s^2
+    C1 = 18  # -
+    C2 = 0.4  # -
+    nu = 1e-6  # m^2/s
+    b = R/(R+1)*g
+
+    diameters = np.logspace(-5, -2, 5)
+    for dp in diameters:
+        z = -np.logspace(-8, -1, 100)
+        Cd = (2 * C1 * nu / np.sqrt(3 * R * g * dp ** 3) + np.sqrt(C2)) ** 2
+        a = 3 * Cd / (4 * (R + 1) * dp)
+        wc = np.sqrt(b/a)
+
+        w = [-analytical_avg_vel(dp, rho_p, z[i]) / wc for i in range(len(z))]
+        plt.loglog(w, -z, label=dp)
     plt.show()
 
 
