@@ -2,16 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import cv2 as cv
+import pandas as pd
 
 matplotlib.use('Qt5Agg')
 
 
 def main():
-    play_animation()
+    # play_animation()
     # run_animation()
     # run_simplified()
     # run_fixed_interface()
-    # run_moving_interface()
+    run_moving_interface()
 
 
 def play_animation():
@@ -337,15 +338,16 @@ def run_fixed_interface():
 
 def run_moving_interface():
     # Settings
-    gamma = .1
+    gamma = .2
+    dp = 1e-3  # particle diameter
     alpha_ice = 1.2e-6  # thermal diffusivity, m^2/s
     alpha_glass = 7.6e-7  # thermal diffusivity, m^2/s
     alpha_stainless_steel = 5e-6  # thermal diffusivity, m^2/s
-    v = 1e-4
-    Fo_ice = alpha_ice / (v * gamma)
-    Fo_sed = alpha_stainless_steel / (v * gamma)
+    v = 1e-4  # ablation rate (m/s)
+    Fo_ice = alpha_ice / (v * dp)
+    Fo_sed = alpha_stainless_steel / (v * dp)
     Ste = 5
-    h = 5e-3
+    h = dp / gamma
     dt = 1e-4
     tf = 2
     phi = 0
@@ -360,7 +362,8 @@ def run_moving_interface():
     Fo = Fo_ice * np.ones((Ny, Nx))
 
     # Fo[Ny//3:2*Ny//3, Nx//10:3*Nx//10] = Fo_sed
-    Fo[circle_mask(Fo.shape, int(0.1/h), int(0.5/h), 0.05/h) == 1] = Fo_sed
+    # Fo[circle_mask(Fo.shape, int(0.1/h), int(0.5/h), 0.05/h) == 1] = Fo_sed
+    Fo[circles_mask(Fo.shape, 0.05 / h, 0.5) == 1] = Fo_sed
 
     Fo_ip, Fo_im = (Fo[1:-1, 1:-1] + Fo[1:-1, 2:]) / 2, (Fo[1:-1, :-2] + Fo[1:-1, 1:-1]) / 2  # Fo_(i+1/2), Fo_(i-1/2)
     Fo_jp, Fo_jm = (Fo[1:-1, 1:-1] + Fo[2:, 1:-1]) / 2, (Fo[:-2, 1:-1] + Fo[1:-1, 1:-1]) / 2  # Fo_(j+1/2), Fo_(j-1/2)
@@ -371,8 +374,8 @@ def run_moving_interface():
 
     # Run
     T[:, :, 0] = -1  # initial condition
-    T[:, 0, 0] = T[:, 1, 0] + (1-phi)/(gamma**2 * Fo_ice * Ste) * h  # Left BC
-    # T[:, 0, 0] = 0
+    # T[:, 0, 0] = T[:, 1, 0] + (1-phi)/(gamma**2 * Fo_ice * Ste) * h  # Left BC
+    T[:, 0, 0] = 0
     for n in range(1, Nt):
         i_int = int(gamma * n*dt / h)  # interface location
         T[1:-1, i_int+1:-1, n] = (T[1:-1, i_int+1:-1, n-1] + gamma ** 2 * dt / h ** 2 *
@@ -392,8 +395,8 @@ def run_moving_interface():
                                                      - Fo_im_bot[i_int:] * (T[-1, i_int+1:-1, n - 1] - T[-1, i_int:-2, n - 1])
                                                      + Fo_jp_bot[i_int:] * (T[0, i_int+1:-1, n - 1] - T[-1, i_int+1:-1, n - 1])
                                                      - Fo_jm_bot[i_int:] * (T[-1, i_int+1:-1, n - 1] - T[-2, i_int+1:-1, n - 1])))  # Bottom
-        T[:, i_int, n] = T[:, 1, n] + (1-phi)/(gamma**2 * Fo_ice * Ste) * h  # Left
-        # T[:, i_int, n] = 0
+        # T[:, i_int, n] = T[:, 1, n] + (1-phi)/(gamma**2 * Fo_ice * Ste) * h  # Left
+        T[:, i_int, n] = 0
         T[:, -1, n] = T[:, -2, n]  # Right
         T[:, :i_int, n] = np.nan  # water
         print("\rsimulating... {:.0f}%".format(n/(Nt-1)*100), end='')
@@ -453,6 +456,27 @@ def circles_mask(shape, r, phi):
     mask[:, :-17] = mask[:, 17:]
     mask[:, -17:] = 0
     return mask
+
+
+# Source - https://stackoverflow.com/a
+# Posted by Pierre D, modified by community. See post 'Timeline' for change history
+# Retrieved 2025-12-10, License - CC BY-SA 4.0
+
+def hcp(n):
+    dim = 3
+    k, j, i = [v.flatten()
+               for v in np.meshgrid(*([range(n)] * dim), indexing='ij')]
+    x = 2 * i + (j + k) % 2
+    y = np.sqrt(3) * (j + 1 / 3 * (k % 2))
+    z = 2 * np.sqrt(6) / 3 * k
+    return np.vstack((x, y, z))
+    # df = pd.DataFrame({
+    #     'x': 2 * i + (j + k) % 2,
+    #     'y': np.sqrt(3) * (j + 1/3 * (k % 2)),
+    #     'z': 2 * np.sqrt(6) / 3 * k,
+    # })
+    # return df
+
 
 
 if __name__ == "__main__":
