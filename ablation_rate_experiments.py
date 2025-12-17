@@ -13,6 +13,7 @@ import matplotlib
 import pickle
 import gsw
 import cv2 as cv
+from PIL import Image
 matplotlib.use('Qt5Agg')
 
 # estimated melt rates in mm/s from Ward2024 (preprint)
@@ -25,9 +26,190 @@ data_Ward2024 = {
 
 
 def main():
-    process_image_data()
+    # test_process_image_data()
+    all_cases = get_all_ids()
+    cases = all_cases
+    # print("\n".join([str(tup) for tup in list(enumerate(cases))]))
+    # return
+    for case in cases:
+        params = get_param(case)
+        if params['images_available'] and (not params['processed']):
+            contours, times = process_case(case)
+
+            with open('contours/contours_'+case+'.pkl', 'wb') as f:
+                pickle.dump([contours, times], f)
+
     # process_force_data()
     # plot_results(fresh_water=True)
+
+
+def animate_contours(case, slow=False, start_n=0):
+    with open('contours/contours_'+case+'.pkl', 'rb') as f:
+        contours, times = pickle.load(f)
+
+    fig, ax = plt.subplots()
+    plt.ion()
+    pause_time = 0.5 if slow else 0.01
+    for n in range(start_n, len(contours)):
+        c = contours[n]
+        ax.clear()
+        ax.plot(c[:, 0], -c[:, 1], '-k')
+
+        ax.set_aspect('equal')
+        ax.set_xlim([0, 3000])
+        ax.set_ylim([-3000, 0])
+        ax.set_title("{:s}  |  n = {:d}  |  t = {:.0f} s".format(case, n, times[n]-times[0]))
+        plt.pause(pause_time)
+    plt.ioff()
+    plt.show()
+
+
+def test_process_image_data():
+    data_folder = '/Volumes/Melting001/SedimentIce/MSc_NynkeNell/data/Images/'
+
+    folders = sorted(glob(data_folder + '*'))
+    folders.remove(data_folder + 'resolution')
+
+    all_cases = get_all_ids()
+    all_cases = all_cases
+    for case in all_cases:
+        params = get_param(case)
+
+        if not params['images_available']:
+            continue
+
+        files = sorted(glob(data_folder + params['folder'] + '/*.JPG'))
+
+        img = plt.imread(files[0])
+        img = rotate_image(img, params['rotation'])
+        gray = np.mean(img, axis=-1)
+
+        # crop
+        ymin, ymax = int(params['crop_ymin']), int(params['crop_ymax'])
+        xmin, xmax = int(params['crop_xmin']), int(params['crop_xmax'])
+        gray = gray[ymin:ymax, xmin:xmax]
+
+        # enhance contrast
+        val99 = np.sort(gray.flatten())[int(gray.size*0.99)]
+        gray = gray / val99 * 250
+        gray[gray > 255] = 255
+        gray = gray.astype(np.uint8)
+
+        # binarize
+        binry = 255 * np.where(gray < params['bin_thresh'], 1, 0).astype(np.uint8)
+
+        if params['dp'] < 500:
+            binry = cv.morphologyEx(binry, cv.MORPH_CLOSE, np.ones((3, 3)))
+
+        if 'clear' in case and binry[0, 0] > 0:
+            _, binry, _, _ = cv.floodFill(binry, None, [0, 0], 0)
+
+        edges = find_edges(binry, largest_only=True, remove_outside=True)
+
+        fig, ax = plt.subplots(1, 3, sharey=True, sharex=True)
+        ax[0].imshow(gray)
+        ax[1].imshow(binry)
+        ax[2].imshow(gray)
+        ax[2].plot(edges[:, 0], edges[:, 1], '-r')
+
+        for a in ax:
+            a.tick_params(labelleft=False, labelbottom=False, left=False, bottom=False)
+        plt.suptitle(case)
+        plt.show()
+
+
+def fix_contour(case, n, bt=None):
+    data_folder = '/Volumes/Melting001/SedimentIce/MSc_NynkeNell/data/Images/'
+    folders = sorted(glob(data_folder + '*'))
+    folders.remove(data_folder + 'resolution')
+    params = get_param(case)
+    files = sorted(glob(data_folder + params['folder'] + '/*.JPG'))
+    fn = files[n]
+
+    if bt is not None:
+        params['bin_thresh'] = bt
+
+    with open('contours/contours_'+case+'.pkl', 'rb') as f:
+        contours, times = pickle.load(f)
+
+    edges = process_file(fn, params, debug=True)
+
+    plt.figure()
+    plt.plot(contours[n][:, 0], contours[n][:, 1], label='before')
+    plt.plot(edges[:, 0], edges[:, 1], label='after')
+    plt.legend()
+    plt.gca().invert_yaxis()
+    plt.gca().set_aspect('equal')
+
+    plt.show()
+
+    if input("Save contour? (y/n)").lower() == 'y':
+        contours[n] = edges
+        with open('contours/contours_' + case + '.pkl', 'wb') as f:
+            pickle.dump([contours, times], f)
+        print("Saved!")
+
+
+def process_file(fn, params, debug=False):
+    img = plt.imread(fn)
+    img = rotate_image(img, params['rotation'])
+    gray = np.mean(img, axis=-1)
+
+    # crop
+    ymin, ymax = int(params['crop_ymin']), int(params['crop_ymax'])
+    xmin, xmax = int(params['crop_xmin']), int(params['crop_xmax'])
+    gray = gray[ymin:ymax, xmin:xmax]
+
+    # enhance contrast
+    val99 = np.sort(gray.flatten())[int(gray.size * 0.99)]
+    gray = gray / val99 * 250
+    gray[gray > 255] = 255
+    gray = gray.astype(np.uint8)
+
+    # binarize
+    binry = 255 * np.where(gray < params['bin_thresh'], 1, 0).astype(np.uint8)
+
+    if params['dp'] < 500:
+        binry = cv.morphologyEx(binry, cv.MORPH_CLOSE, np.ones((3, 3)))
+
+    if 'clear' in params.name and binry[0, 0] > 0:
+        _, binry, _, _ = cv.floodFill(binry, None, [0, 0], 0)
+
+    edges = find_edges(binry, largest_only=True, remove_outside=True)
+
+    if debug:
+        fig, ax = plt.subplots(1, 3, sharey=True, sharex=True, figsize=(12, 5))
+        ax[0].imshow(gray)
+        ax[1].imshow(binry)
+        ax[2].imshow(gray)
+        ax[2].plot(edges[:, 0], edges[:, 1], '-r')
+
+        for a in ax:
+            a.tick_params(labelleft=False, labelbottom=False, left=False, bottom=False)
+        plt.suptitle(params.name + " | bin_thresh = {:d}".format(params['bin_thresh']))
+        plt.show()
+    return edges
+
+
+def process_case(case):
+    data_folder = '/Volumes/Melting001/SedimentIce/MSc_NynkeNell/data/Images/'
+
+    folders = sorted(glob(data_folder + '*'))
+    folders.remove(data_folder + 'resolution')
+
+    params = get_param(case)
+
+    files = sorted(glob(data_folder + params['folder'] + '/*.JPG'))
+    contours = []
+    times = []
+    for fn in files:
+        edges = process_file(fn, params)
+        contours.append(edges)
+        times.append(get_time(fn))
+
+        print("\r[process_case({:s})] {:.1f}%".format(case, len(times)/len(files)*100), end='')
+    print(" \033[42mdone\033[0m")
+    return contours, times
 
 
 def process_force_data(pick_start_end=False):
@@ -126,112 +308,6 @@ def process_force_data(pick_start_end=False):
     if pick_start_end:
         with open('data/start_end.pkl', 'wb') as f:
             pickle.dump(start_end, f)
-
-
-def test_process_image_data():
-    data_folder = '/Volumes/Melting001/SedimentIce/MSc_NynkeNell/data/Images/'
-
-    folders = sorted(glob(data_folder + '*'))
-    folders.remove(data_folder + 'resolution')
-
-    all_cases = get_all_ids()
-    all_cases = all_cases
-    for case in all_cases:
-        params = get_param(case)
-
-        if not params['images_available']:
-            continue
-
-        files = sorted(glob(data_folder + params['folder'] + '/*.JPG'))
-
-        img = plt.imread(files[0])
-        img = rotate_image(img, params['rotation'])
-        gray = np.mean(img, axis=-1)
-
-        # crop
-        ymin, ymax = int(params['crop_ymin']), int(params['crop_ymax'])
-        xmin, xmax = int(params['crop_xmin']), int(params['crop_xmax'])
-        gray = gray[ymin:ymax, xmin:xmax]
-
-        # enhance contrast
-        val99 = np.sort(gray.flatten())[int(gray.size*0.99)]
-        gray = gray / val99 * 250
-        gray[gray > 255] = 255
-        gray = gray.astype(np.uint8)
-
-        # binarize
-        binry = 255 * np.where(gray < params['bin_thresh'], 1, 0).astype(np.uint8)
-
-        if params['dp'] < 500:
-            binry = cv.morphologyEx(binry, cv.MORPH_CLOSE, np.ones((3, 3)))
-
-        if 'clear' in case and binry[0, 0] > 0:
-            _, binry, _, _ = cv.floodFill(binry, None, [0, 0], 0)
-
-        edges = find_edges(binry, largest_only=True, remove_outside=True)
-
-        fig, ax = plt.subplots(1, 3, sharey=True, sharex=True)
-        ax[0].imshow(gray)
-        ax[1].imshow(binry)
-        ax[2].imshow(gray)
-        ax[2].plot(edges[:, 0], edges[:, 1], '-r')
-
-        for a in ax:
-            a.tick_params(labelleft=False, labelbottom=False, left=False, bottom=False)
-        plt.suptitle(case)
-        plt.show()
-
-
-def process_case(case):
-    data_folder = '/Volumes/Melting001/SedimentIce/MSc_NynkeNell/data/Images/'
-
-    folders = sorted(glob(data_folder + '*'))
-    folders.remove(data_folder + 'resolution')
-
-    params = get_param(case)
-
-    files = sorted(glob(data_folder + params['folder'] + '/*.JPG'))
-    contours = []
-    times = []
-    for fn in files:
-        img = plt.imread(fn)
-        img = rotate_image(img, params['rotation'])
-        gray = np.mean(img, axis=-1)
-
-        # crop
-        ymin, ymax = int(params['crop_ymin']), int(params['crop_ymax'])
-        xmin, xmax = int(params['crop_xmin']), int(params['crop_xmax'])
-        gray = gray[ymin:ymax, xmin:xmax]
-
-        # enhance contrast
-        val99 = np.sort(gray.flatten())[int(gray.size*0.99)]
-        gray = gray / val99 * 250
-        gray[gray > 255] = 255
-        gray = gray.astype(np.uint8)
-
-        # binarize
-        binry = 255 * np.where(gray < params['bin_thresh'], 1, 0).astype(np.uint8)
-
-        if params['dp'] < 500:
-            binry = cv.morphologyEx(binry, cv.MORPH_CLOSE, np.ones((3, 3)))
-
-        if 'clear' in case and binry[0, 0] > 0:
-            _, binry, _, _ = cv.floodFill(binry, None, [0, 0], 0)
-
-        edges = find_edges(binry, largest_only=True, remove_outside=True)
-        contours.append(edges)
-        times.append(get_time(fn))
-
-        # fig, ax = plt.subplots(1, 3, sharey=True, sharex=True)
-        # ax[0].imshow(gray)
-        # ax[1].imshow(binry)
-        # ax[2].imshow(gray)
-        # ax[2].plot(edges[:, 0], edges[:, 1], '-r')
-        #
-        # for a in ax:
-        #     a.tick_params(labelleft=False, labelbottom=False, left=False, bottom=False)
-        # plt.suptitle(case)
-        # plt.show()
 
 
 def plot_results(fresh_water=True):
