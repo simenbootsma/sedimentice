@@ -211,7 +211,7 @@ class ConvergenceError(Exception):
 def settling_velocity(d_p, temp, sal, rho_p):
     # Ferguson & Church, J. Sed. Res. (2004)
     rho_f = rho_water(temp, sal)
-    R = (rho_p-rho_f)/rho_f
+    R = np.abs(rho_p-rho_f)/rho_f
     nu_f = 1e-6
     g = 9.81
     C1 = 18
